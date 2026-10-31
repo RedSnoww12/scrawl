@@ -36,6 +36,14 @@ export const UiIcons = {
   palette: <Icon sw={1.8}><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.2-1.8-.5-1.2.2-2.4 1.5-2.4H17a4 4 0 004-4c0-5.5-4-9.8-9-9.8z" /><circle cx="7.5" cy="11" r="1" /><circle cx="10" cy="7" r="1" /><circle cx="15" cy="7.5" r="1" /></Icon>,
   pencil: <Icon d="M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5z" sw={1.8} />,
   trash: <Icon d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" sw={1.8} />,
+  more: <Icon sw={2.2}><path d="M6 12h.01M12 12h.01M18 12h.01" /></Icon>,
+  folder: <Icon d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2h8a1.5 1.5 0 011.5 1.5v8A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" sw={1.7} />,
+  folderPlus: <Icon sw={1.7}><path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2h8a1.5 1.5 0 011.5 1.5v8A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5z" /><path d="M12 11v5M9.5 13.5h5" /></Icon>,
+  share: <Icon sw={1.8}><circle cx="17.5" cy="6" r="2.5" /><circle cx="6.5" cy="12" r="2.5" /><circle cx="17.5" cy="18" r="2.5" /><path d="M8.7 10.8l6.6-3.6M8.7 13.2l6.6 3.6" /></Icon>,
+  link: <Icon sw={1.8}><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
+  users: <Icon sw={1.8}><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0111 0M15.5 5.6a3.2 3.2 0 010 5.8M17.5 14.2A5.5 5.5 0 0120.5 19" /></Icon>,
+  mail: <Icon sw={1.8}><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M4 7l8 6 8-6" /></Icon>,
+  eye: <Icon sw={1.8}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></Icon>,
 };
 
 const sv = (children: ReactNode) => <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeLinecap="round" aria-hidden="true">{children}</svg>;

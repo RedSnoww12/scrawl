@@ -25,6 +25,9 @@ export async function signInWithGoogle(): Promise<{ error: Pick<AuthError, 'mess
     const settings = res.ok ? ((await res.json()) as { external?: { google?: boolean } }) : null;
     if (settings && !settings.external?.google) return { error: { message: 'provider is not enabled' } };
   } catch { /* offline or blocked: let the redirect report it */ }
+  // Google sends people back to the bare address: remember which board link they came from.
+  const hash = window.location.hash.slice(1);
+  try { if (hash) localStorage.setItem('scrawl.flag.return-to', JSON.stringify(hash)); } catch { /* storage blocked */ }
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname, queryParams: { prompt: 'select_account' } },

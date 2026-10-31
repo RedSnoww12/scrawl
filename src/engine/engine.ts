@@ -23,7 +23,7 @@ export interface Snapshot {
   tool: Tool; locked: boolean; zoom: number; grid: boolean; editing: boolean;
   canUndo: boolean; canRedo: boolean;
   selectionCount: number; selectedTypes: ElementType[];
-  values: Style; style: Style; isEmpty: boolean;
+  values: Style; style: Style; isEmpty: boolean; readOnly: boolean;
 }
 
 /** Requests the engine cannot handle itself. */
@@ -95,7 +95,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       tool: st.tool, locked: st.locked, zoom: st.zoom, grid: st.grid, editing: !!editing,
       canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
       selectionCount: sel.length, selectedTypes: [...new Set(sel.map(e => e.type))],
-      values: { ...st.style, ...(sel[0] ? pick(sel[0]) : {}) }, style: { ...st.style }, isEmpty: elements.length === 0,
+      values: { ...st.style, ...(sel[0] ? pick(sel[0]) : {}) }, style: { ...st.style }, isEmpty: elements.length === 0, readOnly,
     };
   }
   let viewTimer = 0;
@@ -178,8 +178,8 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     st.sel = new Set([...st.sel].filter(id => byId(id)));
     onCommit?.(elements); emit(); redraw();
   }
-  function undo() { if (editing) commitText(); const prev = undoStack.pop(); if (prev === undefined) return; redoStack.push(lastSnap); restore(prev); }
-  function redo() { const next = redoStack.pop(); if (next === undefined) return; undoStack.push(lastSnap); restore(next); }
+  function undo() { if (readOnly) return; if (editing) commitText(); const prev = undoStack.pop(); if (prev === undefined) return; redoStack.push(lastSnap); restore(prev); }
+  function redo() { if (readOnly) return; const next = redoStack.pop(); if (next === undefined) return; undoStack.push(lastSnap); restore(next); }
 
   // ---------- view ----------
   const rect = () => canvas.getBoundingClientRect();
@@ -601,6 +601,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
         g: () => (e.shiftKey ? ungroup() : group()), s: () => onCommand?.({ type: 'save-file' }), o: () => onCommand?.({ type: 'pick-file' }),
         '=': () => zoomTo(st.zoom * 1.2), '+': () => zoomTo(st.zoom * 1.2), '-': () => zoomTo(st.zoom / 1.2), 0: () => zoomTo(1),
       };
+      if (readOnly && !['s', 'o', '=', '+', '-', '0'].includes(k) && !(k === 'e' && e.shiftKey)) return; // view only: no editing shortcuts
       if (e.code === 'BracketRight') { e.preventDefault(); return layer(e.shiftKey ? 'front' : 'forward'); }
       if (e.code === 'BracketLeft') { e.preventDefault(); return layer(e.shiftKey ? 'back' : 'backward'); }
       if (k === 'e' && e.shiftKey) { e.preventDefault(); return onCommand?.({ type: 'export' }); }
@@ -651,6 +652,15 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       st.sel.clear(); erasing.clear(); drag = null;
       if (view && Number.isFinite(view.zoom)) { st.sx = view.sx; st.sy = view.sy; st.zoom = clamp(view.zoom, 0.1, 10); viewChanged(); }
       else zoomToFit(false, 1);
+      emit(); redraw();
+    },
+    /** Someone else's saved copy: swap the shapes in place, keeping the view and the text being typed. */
+    applyRemote(els: unknown) {
+      const next = sanitizeElements(els);
+      if (editing) { const i = next.findIndex(el => el.id === editing!.id); if (i >= 0) next[i] = editing; else next.push(editing); }
+      elements = next; lastSnap = JSON.stringify(elements);
+      undoStack = []; redoStack = []; // undoing would roll back the other person's work too
+      st.sel = new Set([...st.sel].filter(id => byId(id)));
       emit(); redraw();
     },
     getElements: (): SceneElement[] => elements.filter(el => el !== editing),

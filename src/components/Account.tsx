@@ -32,7 +32,7 @@ export function AccountButton({ user, onSignIn, onSignOut }: AccountProps) {
             {avatar && <img src={avatar} alt="" referrerPolicy="no-referrer" />}
             <div><div className="acct-name">{name}</div><div className="acct-mail">{user.email}</div></div>
           </div>
-          <p className="hint-text">Your boards are saved to this Google account. Only you can see them.</p>
+          <p className="hint-text">Your boards are saved to this Google account. Only you and the people you share them with can see them.</p>
           <button className="btn" onClick={onSignOut}>Sign out</button>
         </div>
       )}
