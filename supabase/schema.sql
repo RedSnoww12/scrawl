@@ -60,9 +60,12 @@ create table if not exists public.user_boards (
 create index if not exists user_boards_board_idx on public.user_boards (board_id);
 
 -- ============================================================ access rules
+-- The signed-in person's address, only once it is confirmed (Google addresses always are),
+-- so nobody can claim an invite by signing up with someone else's unverified email.
 create or replace function public.my_email() returns text
-language sql stable set search_path = '' as $$
-  select lower(coalesce(auth.jwt() ->> 'email', ''))
+language sql stable security definer set search_path = '' as $$
+  select coalesce((select lower(u.email) from auth.users u
+                   where u.id = auth.uid() and u.email_confirmed_at is not null), '')
 $$;
 
 -- What the signed-in person may do with a board: 'owner', 'edit', 'view', or null for nothing.
@@ -181,14 +184,16 @@ begin
 end $$;
 
 -- Everything in your board list: your boards and the ones shared with you, with your role,
--- your folder for each, and who owns the shared ones.
+-- your folder for each, and who owns the shared ones (the owner's email only for people they invited).
 create or replace function public.list_boards()
 returns table (id uuid, name text, updated_at timestamptz, shape_count integer, version integer, role text,
                folder_id uuid, visibility text, owner_name text, owner_email text)
 language sql stable security definer set search_path = '' as $$
   select b.id, b.name, b.updated_at, b.shape_count, b.version, r.role, ub.folder_id, b.visibility,
          case when r.role <> 'owner' then coalesce(u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name') end,
-         case when r.role <> 'owner' then u.email::text end
+         case when r.role <> 'owner' and exists (select 1 from public.board_members m
+                                                 where m.board_id = b.id and m.email = public.my_email())
+              then u.email::text end
   from public.boards b
   cross join lateral (select public.board_role(b.id) as role) r
   left join public.user_boards ub on ub.board_id = b.id and ub.user_id = auth.uid()
