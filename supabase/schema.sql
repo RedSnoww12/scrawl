@@ -230,6 +230,9 @@ end $$;
 --   'presence:<board id>'            who is here (presence only)
 --   'presence:<board id>:<user id>'  that person's pointer and comment: anyone on the board can
 --                                    listen, only that person can send, so nobody can speak for someone else
+--   'draw:<board id>:<user id>'      the shapes that person is drawing, moving or typing right now:
+--                                    anyone on the board can listen, only that person can send, and only
+--                                    while they may edit the board
 drop policy if exists "Rooms: listen" on realtime.messages;
 drop policy if exists "Rooms: send" on realtime.messages;
 drop function if exists public.can_join_room(text);
@@ -245,6 +248,13 @@ begin
     return kind = 'broadcast'
        and public.board_role(substr(topic, 10, 36)::uuid) is not null
        and (not sending or substr(topic, 47, 36)::uuid = auth.uid());
+  elsif topic ~ ('^draw:' || id || ':' || id || '$') then
+    return kind = 'broadcast'
+       and case when sending
+                then substr(topic, 43, 36)::uuid = auth.uid()
+                     and public.board_role(substr(topic, 6, 36)::uuid) in ('owner', 'edit')
+                else public.board_role(substr(topic, 6, 36)::uuid) is not null
+           end;
   end if;
   return false;
 end $$;

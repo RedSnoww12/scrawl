@@ -40,6 +40,12 @@ export interface EngineOptions {
   style?: Partial<Style>;
   onChange?: (snap: Snapshot) => void;
   onCommit?: (elements: SceneElement[]) => void;
+  /**
+   * The shapes being drawn, moved, resized or typed right now, many times a second, so other
+   * people can watch. `done` comes once at the end with the final shapes; `dropped` are ids that
+   * were in the gesture but are gone (a click too small to keep, a label left empty).
+   */
+  onLive?: (elements: SceneElement[], done: boolean, dropped: string[]) => void;
   onView?: (view: View) => void;
   onCommand?: (cmd: EngineCommand) => void;
 }
@@ -54,7 +60,7 @@ type Drag =
   | { mode: 'box'; start: Vec; cur: Vec; base: Set<string> }
   | { mode: 'erase' };
 
-export function createEngine({ canvas, editor: ta, style: initialStyle, onChange, onCommit, onView, onCommand }: EngineOptions) {
+export function createEngine({ canvas, editor: ta, style: initialStyle, onChange, onCommit, onLive, onView, onCommand }: EngineOptions) {
   const ctx = canvas.getContext('2d')!;
   const rc = rough.canvas(canvas);
   let elements: SceneElement[] = [];
@@ -105,6 +111,34 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     viewTimer = window.setTimeout(() => onView?.({ sx: st.sx, sy: st.sy, zoom: st.zoom }), 300);
   }
 
+  // ---------- other people's edits in progress ----------
+  // Shown in place of the saved shape until their save brings the same shape, or they go quiet.
+  // Never part of `elements`, so nothing here is saved or undone from this browser.
+  const ghosts = new Map<string, { el: SceneElement; until: number }>();
+  let ghostV = 0, ghostTimer = 0, ghostWake = Infinity;
+  const shapeKey = (el: SceneElement) => JSON.stringify(el, (k, v) => (k === 'v' ? undefined : v));
+  function setGhosts(els: SceneElement[], holdMs: number, dropped: string[] = []) {
+    const until = performance.now() + holdMs;
+    dropped.forEach(id => ghosts.delete(id));
+    for (const el of els) { el.v = --ghostV; ghosts.set(el.id, { el, until }); } // a fresh v so the shape is redrawn, not taken from cache
+    wakeAt(until);
+    redraw();
+  }
+  /** Redraw when the first ghost expires, so it goes away even if nothing else happens. */
+  function wakeAt(t: number) {
+    if (t >= ghostWake) return;
+    clearTimeout(ghostTimer); ghostWake = t;
+    ghostTimer = window.setTimeout(() => { ghostWake = Infinity; redraw(); }, t - performance.now() + 50);
+  }
+  /** The ghost to draw for `real` (or for a shape only they have so far), dropping ones that are done. */
+  function ghostFor(id: string, real: SceneElement | undefined, now: number): SceneElement | null {
+    const g = ghosts.get(id);
+    if (!g) return null;
+    if (g.until < now || (real && shapeKey(real) === shapeKey(g.el))) { ghosts.delete(id); return null; }
+    if (drag && st.sel.has(id)) return null; // what this person is dragging wins on their own screen
+    return g.el;
+  }
+
   // ---------- rendering ----------
   let raf = 0;
   function redraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
@@ -120,12 +154,23 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     }
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * z * st.sx, dpr * z * st.sy);
     const view = { x: -st.sx, y: -st.sy, w: W / z, h: H / z };
+    const now = performance.now(), placed = new Set<string>();
+    const draw = (el: SceneElement) => {
+      const b = pad(bounds(el), 20);
+      if (b.x > view.x + view.w || b.y > view.y + view.h || b.x + b.w < view.x || b.y + b.h < view.y) return;
+      drawEl(ctx, rc, el, erasing.has(el.id) ? 0.25 : 1, redraw);
+    };
     for (const el of elements) {
       if (el === editing) continue;
-      const b = pad(bounds(el), 20);
-      if (b.x > view.x + view.w || b.y > view.y + view.h || b.x + b.w < view.x || b.y + b.h < view.y) continue;
-      drawEl(ctx, rc, el, erasing.has(el.id) ? 0.25 : 1, redraw);
+      placed.add(el.id);
+      draw((ghosts.size && ghostFor(el.id, el, now)) || el);
     }
+    for (const id of [...ghosts.keys()]) {
+      if (placed.has(id) || id === editing?.id) continue;
+      const g = ghostFor(id, undefined, now);
+      if (g) draw(g);
+    }
+    for (const g of ghosts.values()) wakeAt(g.until);
     drawSelection();
     if (drag && drag.mode === 'box') {
       const { start: a, cur: b } = drag;
@@ -303,7 +348,25 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       }
       case 'erase': eraseAt(p); break;
     }
+    const live = gestureEls();
+    if (live) onLive?.(live, false, []);
     redraw();
+  }
+  /** The shapes the current gesture is changing, or null when it changes none (yet). */
+  function gestureEls(): SceneElement[] | null {
+    if (editing) return [editing];
+    switch (drag?.mode) {
+      case 'create': case 'point': return [drag.el];
+      case 'move': return drag.moved ? selected() : null;
+      case 'resize': return drag.changed ? selected() : null;
+      default: return null;
+    }
+  }
+  /** The gesture is over: say what is left of the shapes it touched. */
+  function liveDone(touched: SceneElement[] | null) {
+    if (!touched) return;
+    const kept = touched.filter(el => elements.includes(el));
+    onLive?.(kept, true, touched.filter(el => !kept.includes(el)).map(el => el.id));
   }
   function snapAngle(origin: Point, q: Vec): Vec {
     const dx = q.x - origin[0], dy = q.y - origin[1], step = Math.PI / 12;
@@ -359,6 +422,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     pointers.delete(e.pointerId);
     if (pinch) { if (pointers.size < 2) pinch = null; return; }
     if (!drag) return;
+    const touched = gestureEls();
     const d = drag; drag = null;
     switch (d.mode) {
       case 'pan': setCursor(toolCursor()); break;
@@ -375,11 +439,12 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
         if (erasing.size) { elements = elements.filter(el => !erasing.has(el.id)); erasing.clear(); commit(); }
         break;
     }
+    liveDone(touched);
     emit(); redraw();
   }
   function eraseAt(p: Vec) { for (const el of elements) if (hit(el, p, st.zoom)) groupOf(el).forEach(id => erasing.add(id)); }
   function startPinch() {
-    if (drag && drag.mode === 'create') { const el = drag.el; elements = elements.filter(x => x !== el); }
+    if (drag && drag.mode === 'create') { const el = drag.el; elements = elements.filter(x => x !== el); liveDone([el]); }
     drag = null;
     const [a, b] = [...pointers.values()], r = rect();
     pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: st.zoom, mid: toWorld((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top) };
@@ -441,7 +506,11 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       width: (el.w + extra + 4) * z + 'px', height: Math.max(el.h, fs * LH) * z + 'px',
     });
   }
-  const onEditorInput = () => { if (!editing) return; editing.text = ta.value; measure(editing); positionEditor(); };
+  const onEditorInput = () => {
+    if (!editing) return;
+    editing.text = ta.value; measure(editing); positionEditor();
+    if (editing.text.trim()) onLive?.([editing], false, []);
+  };
   const onEditorBlur = () => commitText();
   const onEditorKey = (e: KeyboardEvent) => {
     e.stopPropagation();
@@ -460,7 +529,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       delete el._anchor; delete el._container; delete el._new;
       touch(el); st.sel = new Set([el.id]);
     }
-    commit(); emit(); redraw();
+    commit(); liveDone([el]); emit(); redraw();
   }
 
   // ---------- actions ----------
@@ -649,7 +718,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     load({ elements: els = [], view = null }: { elements?: unknown; view?: View | null } = {}) {
       if (editing) { editing = null; ta.hidden = true; }
       elements = sanitizeElements(els); lastSnap = JSON.stringify(elements); undoStack = []; redoStack = [];
-      st.sel.clear(); erasing.clear(); drag = null;
+      st.sel.clear(); erasing.clear(); ghosts.clear(); drag = null;
       if (view && Number.isFinite(view.zoom)) { st.sx = view.sx; st.sy = view.sy; st.zoom = clamp(view.zoom, 0.1, 10); viewChanged(); }
       else zoomToFit(false, 1);
       emit(); redraw();
@@ -663,6 +732,9 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       st.sel = new Set([...st.sel].filter(id => byId(id)));
       emit(); redraw();
     },
+    /** Someone else's edit in progress: show `els` for up to `holdMs`, unless their save catches up first. */
+    showLive: (els: unknown, holdMs: number, dropped: string[] = []) => setGhosts(sanitizeElements(els), holdMs, dropped),
+    clearLive() { ghosts.clear(); redraw(); },
     getElements: (): SceneElement[] => elements.filter(el => el !== editing),
     getView: (): View => ({ sx: st.sx, sy: st.sy, zoom: st.zoom }),
     flushText: () => commitText(),
@@ -685,7 +757,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     remeasureText() { elements.forEach(el => { if (el.type === 'text') measure(el); }); redraw(); },
     destroy() {
       listeners.forEach(([t, n, f, o]) => t.removeEventListener(n, f, o));
-      ro.disconnect(); cancelAnimationFrame(raf); cancelAnimationFrame(changeRaf); clearTimeout(viewTimer);
+      ro.disconnect(); cancelAnimationFrame(raf); cancelAnimationFrame(changeRaf); clearTimeout(viewTimer); clearTimeout(ghostTimer);
     },
   };
 }

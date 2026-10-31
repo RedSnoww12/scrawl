@@ -46,8 +46,10 @@ export interface PeerInfo { userId: string; name: string; avatar?: string }
 export interface Peer extends PeerInfo { key: string }
 /** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it. */
 export interface Cursor { x: number | null; y: number; text: string }
-export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void }
-export interface Room { move(c: Cursor): void; leave(): void }
+/** Shapes someone is drawing, moving or typing right now. `els` is untrusted and not sanitized yet. */
+export interface LiveEdit { els: unknown; done: boolean; dropped: string[] }
+export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void; draw(key: string, e: LiveEdit): void }
+export interface Room { move(c: Cursor): void; draw(els: SceneElement[], done: boolean, dropped: string[]): void; leave(): void }
 
 // what arrives from other browsers is untrusted: keep only well-formed values
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -231,15 +233,16 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
         return () => { void supabase.removeChannel(channel); };
       },
       // Who is here comes from one shared channel per board; what each person does travels on their
-      // own channel, which the policies in schema.sql let only them send on. So a pointer, a comment,
-      // a name or a face is only shown once that person's own channel has spoken.
+      // own channels, which the policies in schema.sql let only them send on. So a pointer, a comment,
+      // a name or a face is only shown once that person's own channel has spoken. Shapes being drawn
+      // go on a second channel per person ('draw:…') that only people who may edit can send on.
       room(id, userId, on) {
         const tab = uid(), topic = 'presence:' + id;
-        let alive = true, ready = false, last: Cursor = { x: null, y: 0, text: '' };
+        let alive = true, ready = false, penReady = false, last: Cursor = { x: null, y: 0, text: '' };
         let present = new Set<string>();                               // user ids the shared channel lists
         const people = new Map<string, PeerInfo>(), asked = new Set<string>();
         const heard = new Map<string, { userId: string; at: number }>(); // tab → its person, when it last spoke
-        const listening = new Map<string, ReturnType<typeof supabase.channel>>();
+        const listening = new Map<string, ReturnType<typeof supabase.channel>[]>();
 
         const publish = () => {
           if (!alive) return;
@@ -272,7 +275,16 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
               if (m && heard.delete(u + ':' + m.key)) publish();
             })
             .subscribe();
-          listening.set(u, ch);
+          const drawing = supabase.channel(`draw:${id}:${u}`, { config: { private: true } })
+            .on('broadcast', { event: 'draw' }, ({ payload }) => {
+              const v = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+              const key = str(v.key, 40);
+              if (!key || !alive || !Array.isArray(v.els)) return;
+              const dropped = Array.isArray(v.dropped) ? v.dropped.filter((d): d is string => typeof d === 'string').slice(0, 1000) : [];
+              on.draw(u + ':' + key, { els: v.els, done: v.done === true, dropped });
+            })
+            .subscribe();
+          listening.set(u, [ch, drawing]);
         };
 
         const mine = supabase.channel(`${topic}:${userId}`, { config: { private: true } })
@@ -280,6 +292,11 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
         const move = (c: Cursor) => {
           last = c;
           if (ready) void mine.send({ type: 'broadcast', event: 'cursor', payload: { key: tab, ...c } });
+        };
+        const pen = supabase.channel(`draw:${id}:${userId}`, { config: { private: true } })
+          .subscribe(status => { penReady = status === 'SUBSCRIBED'; });
+        const draw = (els: SceneElement[], done: boolean, dropped: string[]) => {
+          if (penReady) void pen.send({ type: 'broadcast', event: 'draw', payload: { key: tab, els, done, dropped } });
         };
         const shared = supabase.channel(topic, { config: { private: true, presence: { key: tab } } });
         shared
@@ -290,7 +307,7 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             const arrived = [...ids].filter(u => !present.has(u));
             present = ids;
             for (const u of ids) if (!listening.has(u)) listen(u);
-            for (const [u, ch] of listening) if (!ids.has(u)) { void supabase.removeChannel(ch); listening.delete(u); }
+            for (const [u, chs] of listening) if (!ids.has(u)) { chs.forEach(ch => void supabase.removeChannel(ch)); listening.delete(u); }
             const unknown = [...ids].filter(u => !people.has(u) && !asked.has(u));
             if (unknown.length) void lookUp(unknown);
             if (arrived.length) setTimeout(() => move(last), 1000); // once they listen, show them where we are
@@ -300,12 +317,12 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
         const beat = window.setInterval(() => { move(last); publish(); }, HEARTBEAT);
 
         return {
-          move,
+          move, draw,
           leave() {
             alive = false; clearInterval(beat);
             if (ready) void mine.send({ type: 'broadcast', event: 'bye', payload: { key: tab } });
-            ready = false;
-            [shared, mine, ...listening.values()].forEach(ch => void supabase.removeChannel(ch));
+            ready = penReady = false;
+            [shared, mine, pen, ...[...listening.values()].flat()].forEach(ch => void supabase.removeChannel(ch));
           },
         };
       },

@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { Engine } from '../engine/engine';
+import type { SceneElement } from '../engine/scene';
 import { MAX_COMMENT, type Cursor, type Peer, type Room, type Sharing } from '../lib/repos';
 import { UiIcons } from './icons';
 
 const COLORS = ['#e8590c', '#2b8a3e', '#1864ab', '#c2255c', '#7048e8', '#0c8599', '#e67700', '#5c940d'];
 const SEND_EVERY = 60;     // ms between pointer updates, well under Realtime's rate limit
+const DRAW_EVERY = 80;     // ms between updates of a shape being drawn
+const HOLD_DRAWING = 10_000, HOLD_DONE = 5000; // ms someone's shape stays up without news, while drawing / until their save arrives
 const COMMENT_FOR = 5000;  // ms a sent comment stays next to the pointer
 
 /** Each person keeps the same color on every screen. */
@@ -36,6 +39,8 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
   const pointer = useRef<{ x: number; y: number } | null>(null); // on screen
   const ownEl = useRef<HTMLDivElement | null>(null);
   const sendTimer = useRef(0), lastSent = useRef(0), fadeTimer = useRef(0);
+  const drawing = useRef<{ els: SceneElement[]; done: boolean; dropped: string[] } | null>(null);
+  const drawTimer = useRef(0), lastDrawn = useRef(0);
 
   // at most one update per SEND_EVERY, and always the latest one
   const send = useCallback(() => {
@@ -45,6 +50,23 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     lastSent.current = performance.now();
     roomRef.current?.move({ ...mine.current });
   }, []);
+
+  // the shapes this person is changing, at most one update per DRAW_EVERY; the end of a gesture goes out at once
+  const sendDrawing = useCallback(() => {
+    clearTimeout(drawTimer.current);
+    const d = drawing.current; if (!d) return;
+    const wait = lastDrawn.current + DRAW_EVERY - performance.now();
+    if (wait > 0 && !d.done) { drawTimer.current = window.setTimeout(sendDrawing, wait); return; }
+    lastDrawn.current = performance.now(); drawing.current = null;
+    roomRef.current?.draw(d.els, d.done, d.dropped);
+  }, []);
+  const draw = useCallback((els: SceneElement[], done: boolean, dropped: string[]) => {
+    if (!roomRef.current) return;
+    if (drawing.current?.done && !done) sendDrawing(); // don't let a new gesture swallow the end of the last one
+    // pictures are too big to send many times a second: they show up once saved
+    drawing.current = { els: els.filter(el => el.type !== 'image'), done, dropped };
+    sendDrawing();
+  }, [sendDrawing]);
 
   const placeOwn = useCallback((el: HTMLDivElement | null) => {
     ownEl.current = el;
@@ -58,15 +80,16 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     const room = sharing.room(boardId, user.id, {
       peers: setPeers,
       cursor: (key, c) => setCursors(cs => ({ ...cs, [key]: c })),
+      draw: (_key, e) => engine?.showLive(e.els, e.done ? HOLD_DONE : HOLD_DRAWING, e.dropped),
     });
     roomRef.current = room;
     return () => {
-      room.leave(); roomRef.current = null;
-      clearTimeout(sendTimer.current); clearTimeout(fadeTimer.current);
+      room.leave(); roomRef.current = null; engine?.clearLive();
+      clearTimeout(sendTimer.current); clearTimeout(fadeTimer.current); clearTimeout(drawTimer.current); drawing.current = null;
       mine.current = { ...mine.current, text: '' };
       setPeers([]); setCursors({}); setComment(null);
     };
-  }, [sharing, boardId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [engine, sharing, boardId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // follow this person's pointer, in board coordinates so it lands on the same spot on every screen
   const live = !!(engine && sharing && boardId && userId);
@@ -130,7 +153,7 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     return () => window.removeEventListener('keydown', onKey);
   }, [live, startComment]);
 
-  return { live, peers, cursors, comment, placeOwn, startComment, typeComment, sendComment, cancelComment };
+  return { live, peers, cursors, comment, placeOwn, startComment, typeComment, sendComment, cancelComment, draw };
 }
 
 export type RoomState = ReturnType<typeof useRoom>;
