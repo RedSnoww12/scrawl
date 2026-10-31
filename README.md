@@ -1,52 +1,39 @@
 # Scrawl
 
-A hand-drawn style whiteboard in a single `index.html`: sketchy shapes, arrows, freehand ink, text, images, and as many boards as you like.
+A hand-drawn style whiteboard: sketchy shapes, arrows, freehand ink, text and images, with as many boards as you like. Sign in with Google and your boards follow you to any device; each person only ever sees their own boards.
 
-No build step and no dependencies to install. The page loads [rough.js](https://roughjs.com) and its fonts from public CDNs.
+Built with React, TypeScript and Vite. Drawing uses [rough.js](https://roughjs.com); accounts and storage use [Supabase](https://supabase.com) (Postgres with row-level security). Deploys as a static site, for example on Vercel.
 
 ## Run it locally
 
 ```bash
-python3 -m http.server 8000
+npm install
+cp .env.example .env.local
+npm run dev
 ```
 
-Then open http://localhost:8000.
+Then open http://localhost:5173. `npm run build` type-checks and builds to `dist/`.
+
+## Project layout
+
+- `src/engine/` – the canvas: scene model and rendering (`scene.ts`), and input, selection, history and clipboard (`engine.ts`). No React in here.
+- `src/components/` – the interface around the canvas: toolbar, style panel, board list, dialogs, sign-in screen.
+- `src/lib/repos.ts` – where boards are stored: this browser (guest mode) or the Supabase `boards` table, behind one interface.
+- `supabase/schema.sql` – the `boards` table and its access rules.
+
+## Supabase setup
+
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor. It creates the `boards` table with row-level security: signed-in people read and change only their own rows, and signed-out visitors get nothing.
+2. **Google sign-in:** in Google Cloud Console, create an OAuth client ID of type *Web application* and add `https://<project>.supabase.co/auth/v1/callback` as an authorized redirect URI. In Supabase, open Authentication → Providers → Google, turn it on, and paste the client ID and secret.
+3. **Redirect URLs:** in Authentication → URL Configuration, set the Site URL to the deployed address and add it, plus `http://localhost:5173`, to the redirect URLs.
+
+The project URL and publishable key go in `.env.local` (see `.env.example`). Both are public by design: the access rules protect the data. On Vercel, the Supabase integration's `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are picked up too. Never put the database password or the `service_role` key in the app.
 
 ## Boards
 
-- Open the board list from the name next to the logo.
-- **New board** starts an empty one. Rename and delete are on each row.
-- Every board saves itself in the browser as you draw and reopens where you left it.
-- Each board has its own link (`/#<board-id>`), so you can bookmark one.
-- **Save to file** writes the current board as `<name>.scrawl.json`. **Open…** loads such a file as a new board. Use these to move a board to another device or browser.
-
-Boards always live in the browser's local storage, so the app opens instantly and works offline. Turn on online sync (below) to also keep them on a server and see them on every device.
-
-## Online sync (optional)
-
-Sync uses [Supabase](https://supabase.com) for sign-in and storage. The page talks to Supabase directly, so it still deploys as a static site.
-
-1. Create a free Supabase project.
-2. In **SQL Editor**, run [`supabase/schema.sql`](supabase/schema.sql). It creates the `boards` table and row-level security rules, so each person can only read and change their own boards.
-3. In **Authentication → URL Configuration**, set the Site URL to where the app is hosted (for example `https://redsnoww12.github.io/scrawl/`) and add it to the redirect URLs. Add `http://localhost:8000/` too if you test locally.
-4. In **Project Settings → API**, copy the project URL and the `anon` public key into `SUPABASE_URL` and `SUPABASE_ANON_KEY` near the end of `index.html`. The anon key is meant to be public; the security rules are what protect the data.
-
-How it behaves:
-
-- A cloud button appears next to the board name. Sign in with an emailed link; no password.
-- On sign-in, boards on this device are uploaded and boards from your other devices are downloaded.
-- Edits upload a moment after you stop drawing. The app also checks for changes when you come back to the tab, when you reconnect, and every minute.
-- If the same board was changed on two devices, the most recent edit wins for that board.
-- Deleting a board deletes it everywhere. Signing out keeps the boards on that device.
-
-With the two values left empty, sync stays off and the app works only in the browser.
-
-## Deploy
-
-It is one static file, so any static host works:
-
-- **GitHub Pages**: push this repository, then go to Settings → Pages and serve from the `main` branch root.
-- **Netlify / Vercel / Cloudflare Pages**: create a project from the repository with no build command and the root as the output folder.
+- Open the board list from the name next to the logo: new, rename, delete.
+- Signed in, boards save to your account a moment after you stop drawing. As a guest, they stay in this browser, and after signing in you can copy them to your account.
+- **Save to file** / **Open file** move a board as a `.scrawl.json` file. Opened files are cleaned on import: only known shapes and embedded images are kept.
 
 ## Keyboard
 
