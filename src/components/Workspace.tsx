@@ -66,6 +66,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
   const boardsBtnRef = useRef<HTMLButtonElement>(null), boardsPanelRef = useRef<HTMLDivElement>(null);
   const commandRef = useRef<(cmd: EngineCommand) => void>(() => {});
   const lostRef = useRef<(id: string) => void>(() => {});
+  const liveRef = useRef<(els: SceneElement[], done: boolean, dropped: string[]) => void>(() => {});
   const isCloud = repo.kind === 'cloud';
   const sharing = repo.sharing;
   boardsRef.current = boards;
@@ -321,6 +322,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
       canvas: canvasRef.current!, editor: editorRef.current!, style: p.style,
       onChange: setSnap,
       onCommit: els => queueSaveRef.current(els),
+      onLive: (els, done, dropped) => liveRef.current(els, done, dropped),
       onView: v => { if (currentRef.current) saveView(currentRef.current.id, v); },
       onCommand: cmd => commandRef.current(cmd),
     });
@@ -363,6 +365,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
   // live edits from the other people on this board
   const currentId = current?.id;
   const room = useRoom(engine, sharing, loadError ? undefined : currentId, user);
+  liveRef.current = room.draw;
   useEffect(() => {
     if (!engine || !currentId || !sharing) return;
     let alive = true;
