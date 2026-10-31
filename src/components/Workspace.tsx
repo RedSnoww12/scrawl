@@ -12,6 +12,7 @@ import { BoardsPanel } from './Boards';
 import { ShareDialog } from './Share';
 import { ExportDialog, HelpDialog, Toast, download } from './Dialogs';
 import { AccountButton } from './Account';
+import { CursorLayer, PeerStack, useRoom } from './Presence';
 import { UiIcons } from './icons';
 import { HINTS } from './config';
 import { toggleTheme, isDark } from '../lib/theme';
@@ -361,6 +362,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
 
   // live edits from the other people on this board
   const currentId = current?.id;
+  const room = useRoom(engine, sharing, loadError ? undefined : currentId, user);
   useEffect(() => {
     if (!engine || !currentId || !sharing) return;
     let alive = true;
@@ -423,6 +425,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
   return (
     <div className={stylesOpen ? 'props-open' : undefined} style={{ height: '100%' }}>
       <canvas id="board" ref={canvasRef} aria-label="Drawing canvas" />
+      {engine && user && <CursorLayer engine={engine} room={room} me={user.id} />}
       <textarea id="editor" ref={editorRef} hidden spellCheck={false} aria-label="Edit text" />
 
       <div id="topbar">
@@ -439,6 +442,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
         </div>
         {engine && !readOnly && <Toolbar snap={snap} engine={engine} />}
         <div className="right-cluster">
+          <PeerStack room={room} />
           {sharing && currentRow && (
             <button className="btn share-btn" onClick={() => setShareId(currentRow.id)}>
               {currentRow.role === 'owner' ? UiIcons.share : UiIcons.link}<span>{currentRow.role === 'owner' ? 'Share' : 'Link'}</span>

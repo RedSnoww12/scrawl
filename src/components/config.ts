@@ -57,4 +57,5 @@ export const HELP: [string, string?][] = [
   ['Nudge', 'Arrows (⇧ for 10)'], ['Write inside a shape', 'Double-click it'], ['Edit selected text', 'Enter'],
   ['View'], ['Zoom in / out', 'Ctrl + / Ctrl −'], ['Reset zoom', 'Ctrl 0'], ['Zoom to fit', '⇧ 1'], ['Zoom to selection', '⇧ 2'], ['Grid and snapping', 'G'],
   ['Dark mode', '⇧ Alt D'], ['Save / Open file', 'Ctrl S / Ctrl O'], ['Export image', 'Ctrl ⇧ E'],
+  ['Together'], ['Comment next to your pointer', '/'], ['Send / discard the comment', 'Enter / Esc'],
 ];

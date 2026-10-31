@@ -43,6 +43,7 @@ export const UiIcons = {
   link: <Icon sw={1.8}><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></Icon>,
   users: <Icon sw={1.8}><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0111 0M15.5 5.6a3.2 3.2 0 010 5.8M17.5 14.2A5.5 5.5 0 0120.5 19" /></Icon>,
   mail: <Icon sw={1.8}><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="M4 7l8 6 8-6" /></Icon>,
+  comment: <Icon sw={1.8}><path d="M4.5 6.5A2 2 0 016.5 4.5h11a2 2 0 012 2v8a2 2 0 01-2 2H11l-4.5 3.5v-3.5h0a2 2 0 01-2-2z" /></Icon>,
   eye: <Icon sw={1.8}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></Icon>,
 };
 

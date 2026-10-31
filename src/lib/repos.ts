@@ -36,7 +36,37 @@ export interface Sharing {
   removeMember(id: string, email: string): Promise<void>;
   /** Hear about saves made by anyone (yourself included). Returns an unsubscribe function. */
   subscribe(id: string, onSave: (row: RemoteBoard) => void): () => void;
+  /** Be present on a board as `userId`: see who else has it open, where their pointer is and what they are saying. */
+  room(id: string, userId: string, on: RoomEvents): Room;
 }
+
+/** What other people see about you while you have a board open, looked up from your Google sign-in. */
+export interface PeerInfo { userId: string; name: string; avatar?: string }
+/** Someone with the board open right now, in one browser tab (`key`). */
+export interface Peer extends PeerInfo { key: string }
+/** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it. */
+export interface Cursor { x: number | null; y: number; text: string }
+export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void }
+export interface Room { move(c: Cursor): void; leave(): void }
+
+// what arrives from other browsers is untrusted: keep only well-formed values
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+// only Google profile pictures: any other address would tell its server who has the board open
+function googleAvatar(v: unknown): string | undefined {
+  try {
+    const u = new URL(str(v, 500));
+    return u.protocol === 'https:' && /^lh[3-6]\.googleusercontent\.com$/.test(u.hostname) ? u.href : undefined;
+  } catch { return undefined; }
+}
+function readCursor(payload: unknown): { key: string; c: Cursor } | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const v = payload as Record<string, unknown>, key = str(v.key, 40), x = num(v.x), y = num(v.y);
+  if (!key) return null;
+  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT) } };
+}
+export const MAX_COMMENT = 140;
+const HEARTBEAT = 10_000, STALE = 25_000; // ms: a tab that went quiet this long is no longer shown
 
 export interface Repo {
   kind: 'local' | 'cloud';
@@ -199,6 +229,85 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             p => onSave(p.new as RemoteBoard))
           .subscribe();
         return () => { void supabase.removeChannel(channel); };
+      },
+      // Who is here comes from one shared channel per board; what each person does travels on their
+      // own channel, which the policies in schema.sql let only them send on. So a pointer, a comment,
+      // a name or a face is only shown once that person's own channel has spoken.
+      room(id, userId, on) {
+        const tab = uid(), topic = 'presence:' + id;
+        let alive = true, ready = false, last: Cursor = { x: null, y: 0, text: '' };
+        let present = new Set<string>();                               // user ids the shared channel lists
+        const people = new Map<string, PeerInfo>(), asked = new Set<string>();
+        const heard = new Map<string, { userId: string; at: number }>(); // tab → its person, when it last spoke
+        const listening = new Map<string, ReturnType<typeof supabase.channel>>();
+
+        const publish = () => {
+          if (!alive) return;
+          const now = Date.now();
+          for (const [k, h] of heard) if (now - h.at > STALE || !present.has(h.userId)) heard.delete(k);
+          on.peers([...heard].flatMap(([key, h]) => { const p = people.get(h.userId); return p ? [{ ...p, key }] : []; }));
+        };
+        const lookUp = async (ids: string[]) => {
+          ids.forEach(i => asked.add(i));
+          const { data, error } = await supabase.rpc('board_people', { b: id, ids });
+          if (error) { ids.forEach(i => asked.delete(i)); return; } // ask again on the next change
+          for (const r of (data ?? []) as { user_id: string; name: string | null; avatar: string | null }[]) {
+            people.set(r.user_id, { userId: r.user_id, name: str(r.name, 60) || 'Someone', avatar: googleAvatar(r.avatar) });
+          }
+          publish();
+        };
+        const listen = (u: string) => {
+          const ch = supabase.channel(`${topic}:${u}`, { config: { private: true } })
+            .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+              const m = readCursor(payload);
+              if (!m || !alive) return;
+              const k = u + ':' + m.key; // keys are per sender, so nobody can take over someone else's tab
+              const isNew = !heard.has(k);
+              heard.set(k, { userId: u, at: Date.now() });
+              on.cursor(k, m.c);
+              if (isNew) publish();
+            })
+            .on('broadcast', { event: 'bye' }, ({ payload }) => {
+              const m = readCursor(payload);
+              if (m && heard.delete(u + ':' + m.key)) publish();
+            })
+            .subscribe();
+          listening.set(u, ch);
+        };
+
+        const mine = supabase.channel(`${topic}:${userId}`, { config: { private: true } })
+          .subscribe(status => { ready = status === 'SUBSCRIBED'; if (ready) move(last); });
+        const move = (c: Cursor) => {
+          last = c;
+          if (ready) void mine.send({ type: 'broadcast', event: 'cursor', payload: { key: tab, ...c } });
+        };
+        const shared = supabase.channel(topic, { config: { private: true, presence: { key: tab } } });
+        shared
+          .on('presence', { event: 'sync' }, () => {
+            const state = shared.presenceState<{ userId?: unknown }>();
+            const ids = new Set(Object.values(state).flat().map(m => str(m.userId, 64))
+              .filter(u => u !== userId && looksLikeBoardId(u))); // your other tabs are not other people
+            const arrived = [...ids].filter(u => !present.has(u));
+            present = ids;
+            for (const u of ids) if (!listening.has(u)) listen(u);
+            for (const [u, ch] of listening) if (!ids.has(u)) { void supabase.removeChannel(ch); listening.delete(u); }
+            const unknown = [...ids].filter(u => !people.has(u) && !asked.has(u));
+            if (unknown.length) void lookUp(unknown);
+            if (arrived.length) setTimeout(() => move(last), 1000); // once they listen, show them where we are
+            publish();
+          })
+          .subscribe(status => { if (status === 'SUBSCRIBED') void shared.track({ userId }); });
+        const beat = window.setInterval(() => { move(last); publish(); }, HEARTBEAT);
+
+        return {
+          move,
+          leave() {
+            alive = false; clearInterval(beat);
+            if (ready) void mine.send({ type: 'broadcast', event: 'bye', payload: { key: tab } });
+            ready = false;
+            [shared, mine, ...listening.values()].forEach(ch => void supabase.removeChannel(ch));
+          },
+        };
       },
     },
   };

@@ -223,4 +223,58 @@ do $$ begin
   end if;
 end $$;
 
+-- ============================================================ live cursors
+-- Who has a board open, where their pointer is and the comments they type next to it.
+-- Nothing is stored; it all travels over private Realtime channels that only people who can
+-- open the board may join:
+--   'presence:<board id>'            who is here (presence only)
+--   'presence:<board id>:<user id>'  that person's pointer and comment: anyone on the board can
+--                                    listen, only that person can send, so nobody can speak for someone else
+drop policy if exists "Rooms: listen" on realtime.messages;
+drop policy if exists "Rooms: send" on realtime.messages;
+drop function if exists public.can_join_room(text);
+
+create or replace function public.can_use_room(topic text, kind text, sending boolean) returns boolean
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  id constant text := '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+begin
+  if topic ~ ('^presence:' || id || '$') then
+    return kind = 'presence' and public.board_role(substr(topic, 10, 36)::uuid) is not null;
+  elsif topic ~ ('^presence:' || id || ':' || id || '$') then
+    return kind = 'broadcast'
+       and public.board_role(substr(topic, 10, 36)::uuid) is not null
+       and (not sending or substr(topic, 47, 36)::uuid = auth.uid());
+  end if;
+  return false;
+end $$;
+
+create policy "Rooms: listen" on realtime.messages for select to authenticated
+  using (public.can_use_room((select realtime.topic()), extension, false));
+create policy "Rooms: send" on realtime.messages for insert to authenticated
+  with check (public.can_use_room((select realtime.topic()), extension, true));
+
+-- Names and pictures of the people on a board, from their Google sign-in (which they cannot edit),
+-- so nobody can show up under someone else's name. Only for people who can open the board.
+create or replace function public.board_people(b uuid, ids uuid[])
+returns table (user_id uuid, name text, avatar text)
+language sql stable security definer set search_path = '' as $$
+  select u.id,
+         coalesce(g.data ->> 'full_name', g.data ->> 'name'),
+         coalesce(g.data ->> 'avatar_url', g.data ->> 'picture')
+  from auth.users u
+  left join lateral (select i.identity_data as data from auth.identities i
+                     where i.user_id = u.id and i.provider = 'google' order by i.created_at limit 1) g on true
+  where u.id = any (ids)
+    and public.board_role(b) is not null
+    and (u.id = (select bd.user_id from public.boards bd where bd.id = b)
+         or (u.email_confirmed_at is not null
+             and lower(u.email) in (select m.email from public.board_members m where m.board_id = b))
+         or (u.id in (select ub.user_id from public.user_boards ub where ub.board_id = b)
+             and (select bd.visibility from public.boards bd where bd.id = b) = 'link'))
+$$;
+
+revoke all on function public.can_use_room(text, text, boolean), public.board_people(uuid, uuid[]) from public, anon;
+grant execute on function public.can_use_room(text, text, boolean), public.board_people(uuid, uuid[]) to authenticated;
+
 notify pgrst, 'reload schema';
