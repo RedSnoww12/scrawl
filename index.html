@@ -322,7 +322,7 @@ button { font: inherit; color: inherit; }
 <input type="file" id="fileImage" accept="image/*" hidden>
 <div id="toast" hidden role="status"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js" integrity="sha384-1NLkwxMO2sOqcq7rQkFBhIAUJtbt8ziLxhVKVgKfFGMEU8pF+GEq5LVogviveup6" crossorigin="anonymous"></script>
 <script>
 (() => {
 'use strict';
@@ -425,6 +425,42 @@ function makeEl(type, p, over = {}) {
   if (type === 'freedraw' && !el.points) el.points = [[0, 0]];
   if (type === 'text') { el.fontSize = el.fontSize || s.fontSize; el.text = el.text || ''; el.align = el.align || 'left'; measure(el); }
   return el;
+}
+// Files and pasted data come from outside: keep only known element types and well-formed fields,
+// and only embedded images, so a scene can never make the page fetch a remote URL.
+const TYPES = new Set(['rectangle', 'diamond', 'ellipse', 'line', 'arrow', 'freedraw', 'text', 'image']);
+const COLOR = /^(#[0-9a-f]{3,8}|transparent)$/i;
+const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+function sanitizeElements(list) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, 20000).flatMap(o => {
+    if (!o || typeof o !== 'object' || !TYPES.has(o.type)) return [];
+    const el = {
+      id: typeof o.id === 'string' && o.id.length <= 40 ? o.id : uid(), type: o.type,
+      x: num(o.x), y: num(o.y), w: Math.abs(num(o.w)), h: Math.abs(num(o.h)),
+      stroke: COLOR.test(o.stroke) ? o.stroke : '#1f2328', bg: COLOR.test(o.bg) ? o.bg : 'transparent',
+      fill: ['hachure', 'cross-hatch', 'solid'].includes(o.fill) ? o.fill : 'hachure',
+      sw: clamp(num(o.sw, 2), 0.5, 20), ss: ['solid', 'dashed', 'dotted'].includes(o.ss) ? o.ss : 'solid',
+      rough: clamp(num(o.rough, 1), 0, 3), round: !!o.round, opacity: clamp(num(o.opacity, 100), 0, 100),
+      seed: Math.floor(num(o.seed, rand())), v: 0,
+      groupIds: Array.isArray(o.groupIds) ? o.groupIds.filter(g => typeof g === 'string').slice(0, 20) : [],
+    };
+    if (isLinear(el.type) || el.type === 'freedraw') {
+      const pts = Array.isArray(o.points) ? o.points.filter(p => Array.isArray(p) && p.length >= 2).map(p => [num(p[0]), num(p[1])]) : [];
+      if (pts.length < (el.type === 'freedraw' ? 1 : 2)) return [];
+      el.points = pts.slice(0, 50000);
+    }
+    if (el.type === 'text') {
+      if (typeof o.text !== 'string' || !o.text) return [];
+      el.text = o.text.slice(0, 10000); el.fontSize = clamp(num(o.fontSize, 28), 4, 400);
+      el.align = o.align === 'center' ? 'center' : 'left'; measure(el);
+    }
+    if (el.type === 'image') {
+      if (typeof o.src !== 'string' || !/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(o.src)) return [];
+      el.src = o.src;
+    }
+    return [el];
+  });
 }
 function measure(el) {
   mctx.font = fontStr(el.fontSize);
@@ -979,7 +1015,7 @@ document.addEventListener('paste', e => {
   const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
   if (file) return insertImage(file, lastWorld);
   const text = e.clipboardData?.getData('text/plain') || '';
-  try { const d = JSON.parse(text); if (d.type === 'scrawl/clipboard' && Array.isArray(d.elements)) return pasteEls(d.elements); } catch {}
+  try { const d = JSON.parse(text); if (d.type === 'scrawl/clipboard' && Array.isArray(d.elements)) { const els = sanitizeElements(d.elements); if (els.length) return pasteEls(els); } } catch {}
   if (text.trim()) {
     const el = makeEl('text', lastWorld, { text: text.replace(/\r/g, '').slice(0, 5000), opacity: 100 });
     elements.push(el); st.sel = new Set([el.id]); commit(); updateUI(); redraw(); return;
@@ -1013,7 +1049,7 @@ function loadSceneFile(file) {
     const d = JSON.parse(t);
     if (!d || !Array.isArray(d.elements)) throw new Error();
     const name = (d.name || file.name.replace(/(\.scrawl)?(\.json)?$/i, '')).slice(0, 80);
-    newBoard(name, d.elements); toast(`Opened “${name}” as a new board`);
+    newBoard(name, sanitizeElements(d.elements)); toast(`Opened “${name}” as a new board`);
   }).catch(() => toast('That file is not a Scrawl scene. Choose a .scrawl or .json file saved from Scrawl.'));
 }
 window.addEventListener('dragover', e => e.preventDefault());
