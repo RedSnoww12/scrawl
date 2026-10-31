@@ -22,6 +22,7 @@
   --accent: #2f5bea;
   --accent-soft: #e2e8ff;
   --danger: #c92a2a;
+  --ok: #2b8a3e;
   --shadow: 0 1px 2px rgba(20, 30, 60, .06), 0 8px 24px rgba(20, 30, 60, .09);
   --canvas-filter: none;
   --font-brand: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
@@ -31,7 +32,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #131519; --ui: #1c2029; --ui-2: #262b37; --line: #343a4a; --ink: #e8ebf2; --muted: #9aa3b5;
-    --accent: #8ea6ff; --accent-soft: #29335a; --danger: #ff8787;
+    --accent: #8ea6ff; --accent-soft: #29335a; --danger: #ff8787; --ok: #69db7c;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
     --canvas-filter: invert(92%) hue-rotate(180deg);
     color-scheme: dark;
@@ -39,7 +40,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #131519; --ui: #1c2029; --ui-2: #262b37; --line: #343a4a; --ink: #e8ebf2; --muted: #9aa3b5;
-  --accent: #8ea6ff; --accent-soft: #29335a; --danger: #ff8787;
+  --accent: #8ea6ff; --accent-soft: #29335a; --danger: #ff8787; --ok: #69db7c;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
   --canvas-filter: invert(92%) hue-rotate(180deg);
   color-scheme: dark;
@@ -128,6 +129,30 @@ button { font: inherit; color: inherit; }
 .board-row .icon-btn svg { width: 17px; height: 17px; }
 .board-row .icon-btn.armed { width: auto; padding: 0 10px; color: var(--ui); background: var(--danger); font-size: 12.5px; font-weight: 600; }
 .bp-foot { padding: 10px 16px 14px; }
+
+/* cloud sync */
+#cloudBtn { position: relative; margin-left: 2px; }
+.cloud-dot {
+  position: absolute; right: 6px; bottom: 7px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); box-shadow: 0 0 0 2px var(--ui);
+}
+#cloudBtn[data-state="synced"] .cloud-dot { background: var(--ok); }
+#cloudBtn[data-state="syncing"] .cloud-dot { background: var(--accent); }
+#cloudBtn[data-state="error"] .cloud-dot, #cloudBtn[data-state="offline"] .cloud-dot { background: var(--danger); }
+@media (prefers-reduced-motion: no-preference) {
+  #cloudBtn[data-state="syncing"] .cloud-dot { animation: pulse 1s ease-in-out infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: .3; } }
+}
+.cloud-copy { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+.cloud-form { display: flex; flex-direction: column; gap: 8px; }
+.cloud-form label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cloud-form input {
+  font: inherit; font-size: 15px; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--ui); color: var(--ink);
+}
+.cloud-form input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.cloud-status { margin: 0; font-size: 13px; color: var(--muted); min-height: 1em; }
+.cloud-status[data-tone="error"] { color: var(--danger); }
 
 /* properties */
 #props {
@@ -245,6 +270,10 @@ button { font: inherit; color: inherit; }
       <span id="boardName">Board</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
     </button>
+    <button class="icon-btn" id="cloudBtn" hidden data-state="signedout" aria-label="Sync boards" title="Sync boards">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 01-.6-8.96A6 6 0 0118 8.5a4.25 4.25 0 01-.5 9.5z"/></svg>
+      <span class="cloud-dot" aria-hidden="true"></span>
+    </button>
   </div>
   <div class="island" id="tools" role="toolbar" aria-label="Tools"></div>
   <div class="spacer"></div>
@@ -308,6 +337,29 @@ button { font: inherit; color: inherit; }
       <button class="btn" id="expCopy">Copy PNG</button>
     </div>
     <p class="hint-text">If downloads are blocked where this page is open, right-click the preview and choose “Save image as”.</p>
+  </div>
+</div>
+
+<div class="modal" id="cloudDlg" hidden>
+  <div class="island dialog" role="dialog" aria-labelledby="cloudTitle" style="width:min(440px,100%)">
+    <header><h2 id="cloudTitle">Sync your boards</h2><button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <div id="cloudOut">
+      <p class="cloud-copy">Sign in to keep your boards online and open them on any device. Without signing in, boards stay in this browser.</p>
+      <form id="cloudForm" class="cloud-form">
+        <label for="cloudEmail">Email</label>
+        <input type="email" id="cloudEmail" required autocomplete="email" placeholder="you@example.com">
+        <button class="btn primary" type="submit" id="cloudSend">Email me a sign-in link</button>
+      </form>
+    </div>
+    <div id="cloudIn" hidden>
+      <p class="cloud-copy">Signed in as <strong id="cloudWho"></strong>. Boards save online as you draw.</p>
+      <div class="actions">
+        <button class="btn primary" id="cloudSync">Sync now</button>
+        <button class="btn" id="cloudOutBtn">Sign out</button>
+      </div>
+      <p class="hint-text">Boards stay on this device after you sign out.</p>
+    </div>
+    <p class="cloud-status" id="cloudStatus" role="status"></p>
   </div>
 </div>
 
@@ -613,6 +665,7 @@ function commit() {
   undoStack.push(lastSnap); if (undoStack.length > 150) undoStack.shift();
   redoStack = []; lastSnap = s;
   const b = currentBoard(); if (b) b.updated = Date.now();
+  markDirty(boardId);
   scheduleSave(); updateUI();
 }
 function restore(snap) { elements = JSON.parse(snap); lastSnap = snap; st.sel = new Set([...st.sel].filter(id => byId(id))); scheduleSave(); updateUI(); redraw(); }
@@ -1493,6 +1546,7 @@ function openBoard(id, fit = false) {
 function newBoard(name, els = []) {
   const b = { id: uid(), name: name || nextBoardName(), updated: Date.now(), count: els.length };
   boards.unshift(b);
+  markDirty(b.id);
   store.set(boardKey(b.id), { elements: els });
   openBoard(b.id, true);
   renderBoards();
@@ -1501,13 +1555,15 @@ function newBoard(name, els = []) {
 function renameBoard(id, name) {
   const b = boards.find(x => x.id === id); name = name.trim().slice(0, 80);
   if (!b || !name || name === b.name) return;
-  b.name = name;
+  b.name = name; b.updated = Date.now();
+  markDirty(id);
   if (id === boardId) { $('#boardName').textContent = name; document.title = `${name} · Scrawl`; }
   store.set(BOARDS_KEY, boards);
 }
 function deleteBoard(id) {
   const b = boards.find(x => x.id === id); if (!b) return;
   boards = boards.filter(x => x !== b);
+  tombstone(b);
   store.del(boardKey(id)); store.set(BOARDS_KEY, boards);
   if (!boards.length) newBoard();
   else if (id === boardId) { boardId = null; openBoard(sortedBoards()[0].id); }
@@ -1584,6 +1640,169 @@ window.addEventListener('storage', e => {
   if (!boardsPanel.hidden) renderBoards();
 });
 
+// ---------- cloud sync (Supabase) ----------
+// Fill both in to turn on online saving; leave them empty and boards stay in this browser only.
+// The anon key is meant to be public: row-level security (supabase/schema.sql) keeps each person's boards private.
+const SUPABASE_URL = '';
+const SUPABASE_ANON_KEY = '';
+const SUPABASE_JS = {
+  src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',
+  integrity: 'sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o',
+};
+const TOMB_KEY = 'scrawl.deleted';
+const cloud = { client: null, user: null, state: 'off', timer: 0, dirty: new Set(), busy: null, lastSync: 0 };
+
+function setCloud(state, msg = '') {
+  cloud.state = state;
+  const btn = $('#cloudBtn');
+  btn.dataset.state = state;
+  const label = {
+    signedout: 'Sign in to sync boards', syncing: 'Syncing…', synced: 'Boards synced',
+    offline: 'Offline: changes will sync when you reconnect', error: 'Sync failed',
+  }[state] || 'Sync boards';
+  btn.title = label; btn.setAttribute('aria-label', label);
+  const statusEl = $('#cloudStatus');
+  statusEl.dataset.tone = state === 'error' ? 'error' : '';
+  statusEl.textContent = msg || (state === 'synced' && cloud.lastSync ? `Last synced ${ago(cloud.lastSync)}.` : state === 'syncing' ? 'Syncing…' : state === 'offline' ? label : '');
+}
+function renderAccount() {
+  $('#cloudOut').hidden = !!cloud.user; $('#cloudIn').hidden = !cloud.user;
+  $('#cloudWho').textContent = cloud.user?.email || '';
+}
+function markDirty(id) {
+  if (!id || cloud.state === 'off') return;
+  cloud.dirty.add(id);
+  if (!cloud.user) return;
+  clearTimeout(cloud.timer); cloud.timer = setTimeout(pushDirty, 1500);
+}
+function tombstone(b) {
+  if (cloud.state === 'off') return;
+  const t = (store.get(TOMB_KEY) || []).filter(x => x.id !== b.id);
+  t.push({ id: b.id, name: b.name, at: Date.now() });
+  store.set(TOMB_KEY, t.slice(-500));
+  cloud.dirty.delete(b.id);
+  if (cloud.user) { clearTimeout(cloud.timer); cloud.timer = setTimeout(pushDirty, 800); }
+}
+// One sync at a time; a request made while one runs waits for it.
+function exclusive(fn) {
+  const run = () => fn().finally(() => { cloud.busy = null; });
+  cloud.busy = cloud.busy ? cloud.busy.then(run, run) : run();
+  return cloud.busy;
+}
+const pushDirty = () => exclusive(async () => {
+  if (!cloud.user) return;
+  if (!navigator.onLine) return setCloud('offline');
+  const ids = [...cloud.dirty]; cloud.dirty.clear();
+  const tombs = store.get(TOMB_KEY) || [];
+  const rows = [];
+  for (const id of ids) {
+    const b = boards.find(x => x.id === id); if (!b) continue;
+    const d = id === boardId ? { elements: elements.filter(el => el !== editing), view: { sx: st.sx, sy: st.sy, zoom: st.zoom } } : store.get(boardKey(id)) || {};
+    rows.push({ user_id: cloud.user.id, id, name: b.name, elements: d.elements || [], view: d.view || null, updated_at: new Date(b.updated || Date.now()).toISOString(), deleted: false });
+  }
+  for (const t of tombs) rows.push({ user_id: cloud.user.id, id: t.id, name: t.name || '', elements: [], view: null, updated_at: new Date(t.at).toISOString(), deleted: true });
+  if (!rows.length) { cloud.lastSync = Date.now(); return setCloud('synced'); }
+  setCloud('syncing');
+  const { error } = await cloud.client.from('boards').upsert(rows, { onConflict: 'user_id,id' });
+  if (error) { ids.forEach(id => cloud.dirty.add(id)); return setCloud('error', `Could not save online: ${error.message}`); }
+  const sent = new Set(tombs.map(t => t.id));
+  store.set(TOMB_KEY, (store.get(TOMB_KEY) || []).filter(t => !sent.has(t.id)));
+  cloud.lastSync = Date.now(); setCloud('synced');
+});
+// Last write wins per board, judged by each board's edit time.
+const pull = () => exclusive(async () => {
+  if (!cloud.user) return;
+  if (!navigator.onLine) return setCloud('offline');
+  setCloud('syncing');
+  const { data: rows, error } = await cloud.client.from('boards').select('id,name,updated_at,deleted');
+  if (error) return setCloud('error', `Could not load your boards: ${error.message}`);
+  const tombIds = new Set((store.get(TOMB_KEY) || []).map(t => t.id));
+  const remoteIds = new Set(rows.map(r => r.id));
+  const fetchIds = [];
+  let currentGone = false, currentStale = false;
+  for (const r of rows) {
+    const rt = Date.parse(r.updated_at), b = boards.find(x => x.id === r.id);
+    if (r.deleted) {
+      if (b && (b.updated || 0) <= rt) {
+        boards = boards.filter(x => x !== b); store.del(boardKey(b.id)); cloud.dirty.delete(b.id);
+        if (b.id === boardId) currentGone = true;
+      }
+      continue;
+    }
+    if (tombIds.has(r.id)) continue;
+    if (!b || rt > (b.updated || 0)) {
+      if (b && b.id === boardId && (cloud.dirty.has(b.id) || drag || editing)) continue;
+      fetchIds.push(r.id);
+    } else if ((b.updated || 0) > rt) cloud.dirty.add(b.id);
+  }
+  for (const b of boards) if (!remoteIds.has(b.id)) cloud.dirty.add(b.id);
+  if (fetchIds.length) {
+    const { data: full, error: e2 } = await cloud.client.from('boards').select('id,name,elements,view,updated_at').in('id', fetchIds);
+    if (e2) return setCloud('error', `Could not load your boards: ${e2.message}`);
+    for (const r of full) {
+      const els = sanitizeElements(r.elements), rt = Date.parse(r.updated_at);
+      let b = boards.find(x => x.id === r.id);
+      if (!b) { b = { id: r.id }; boards.push(b); }
+      Object.assign(b, { name: String(r.name || 'Board').slice(0, 80), updated: rt, count: els.length });
+      const local = store.get(boardKey(r.id)) || {};
+      store.set(boardKey(r.id), { elements: els, view: local.view || r.view || null });
+      if (r.id === boardId) currentStale = true;
+    }
+  }
+  store.set(BOARDS_KEY, boards);
+  if (currentGone) { boardId = null; if (boards.length) openBoard(sortedBoards()[0].id); else newBoard(); }
+  else if (currentStale) { const keep = boardId; boardId = null; openBoard(keep); }
+  $('#boardName').textContent = currentBoard()?.name || 'Board';
+  if (!boardsPanel.hidden) renderBoards();
+  cloud.lastSync = Date.now(); setCloud('synced');
+}).then(() => (cloud.dirty.size || (store.get(TOMB_KEY) || []).length ? pushDirty() : null));
+
+function loadScript({ src, integrity }) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.integrity = integrity; s.crossOrigin = 'anonymous';
+    s.onload = res; s.onerror = () => rej(new Error('load failed'));
+    document.head.appendChild(s);
+  });
+}
+async function initCloud() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  $('#cloudBtn').hidden = false; setCloud('signedout'); renderAccount();
+  try { await loadScript(SUPABASE_JS); }
+  catch { return setCloud('error', 'Could not load the sync library. Check your connection and reload.'); }
+  cloud.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
+  });
+  cloud.client.auth.onAuthStateChange((_event, session) => {
+    const u = session?.user || null, was = cloud.user;
+    cloud.user = u; renderAccount();
+    if (!u) { cloud.dirty.clear(); return setCloud('signedout'); }
+    // calling Supabase inside this callback can deadlock its auth lock, so defer
+    if (!was || was.id !== u.id) setTimeout(() => { pull(); if (!$('#cloudDlg').hidden) toast('Signed in. Your boards are syncing.'); }, 0);
+  });
+  window.addEventListener('online', () => pull());
+  window.addEventListener('offline', () => cloud.user && setCloud('offline'));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pushDirty(); else pull(); });
+  setInterval(() => { if (!document.hidden && cloud.user) pull(); }, 60000);
+}
+$('#cloudBtn').addEventListener('click', () => { closeMenu(); closeBoards(); renderAccount(); setCloud(cloud.state); openModal('#cloudDlg'); });
+$('#cloudForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!cloud.client) return setCloud('error', 'Sync is still loading. Try again in a moment.');
+  const email = $('#cloudEmail').value.trim();
+  $('#cloudSend').disabled = true;
+  const { error } = await cloud.client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  $('#cloudSend').disabled = false;
+  if (error) setCloud('error', `Could not send the link: ${error.message}`);
+  else setCloud('signedout', `Check ${email} for a sign-in link. Open it on this device to finish signing in.`);
+});
+$('#cloudSync').addEventListener('click', () => pull());
+$('#cloudOutBtn').addEventListener('click', async () => {
+  await pushDirty();
+  await cloud.client.auth.signOut();
+  toast('Signed out. Your boards are still on this device.');
+});
+
 // ---------- boot ----------
 function boot() {
   const prefs = store.get(PREFS_KEY);
@@ -1612,6 +1831,7 @@ function boot() {
 const fontsReady = document.fonts ? Promise.race([document.fonts.load('28px Kalam'), new Promise(r => setTimeout(r, 2500))]) : Promise.resolve();
 fontsReady.then(() => {
   boot();
+  initCloud();
   // remeasure once the hand font is definitely in, so saved text boxes fit their glyphs
   document.fonts && document.fonts.ready.then(() => { elements.forEach(el => { if (el.type === 'text') { measure(el); } }); redraw(); });
 });
