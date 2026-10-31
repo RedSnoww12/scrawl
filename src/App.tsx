@@ -13,14 +13,22 @@ function readAuthError(): string {
   return msg ? friendlyAuthError(msg) : '';
 }
 
+// Back from Google: reopen the board link the person arrived with.
+function restoreReturnTo(): void {
+  const id = prefs.getFlag<string>('return-to');
+  if (!id) return;
+  prefs.setFlag('return-to', null);
+  if (!location.hash.slice(1)) history.replaceState(null, '', location.pathname + location.search + '#' + id);
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined while we ask Supabase
   const [guest, setGuest] = useState(() => !!prefs.getFlag('guest'));
   const [authError, setSignInError] = useState(readAuthError);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s ?? null));
+    supabase.auth.getSession().then(({ data }) => { if (data.session) restoreReturnTo(); setSession(data.session ?? null); });
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => { if (s) restoreReturnTo(); setSession(s ?? null); });
     return () => data.subscription.unsubscribe();
   }, []);
 

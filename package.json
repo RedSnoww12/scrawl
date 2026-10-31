@@ -2,6 +2,13 @@
   "name": "scrawl",
   "private": true,
   "version": "1.0.0",
+  "description": "A hand-drawn whiteboard you can share: sketchy shapes, folders, Google sign-in and live collaboration.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RedSnoww12/scrawl.git"
+  },
+  "homepage": "https://scrawl-seven.vercel.app",
   "type": "module",
   "scripts": {
     "dev": "vite",

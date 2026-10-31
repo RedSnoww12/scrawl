@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { GoogleG } from './icons';
 import { exportSvg, sampleScene } from '../engine/scene';
 import { signInWithGoogle } from '../lib/supabase';
+import { looksLikeBoardId } from '../lib/repos';
 
 export function friendlyAuthError(msg = ''): string {
   if (/provider is not enabled|unsupported provider/i.test(msg)) return 'Google sign-in is not set up for this app yet. The app owner needs to enable the Google provider in Supabase.';
@@ -18,6 +19,7 @@ export default function SignIn({ onGuest, initialError }: SignInProps) {
     const svg = exportSvg(sampleScene(), { background: false });
     return svg ? URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })) : '';
   }, []);
+  const sharedLink = looksLikeBoardId(location.hash.slice(1));
   const google = async () => {
     setBusy(true); setError('');
     const { error: e } = await signInWithGoogle();
@@ -28,13 +30,15 @@ export default function SignIn({ onGuest, initialError }: SignInProps) {
       <div className="island signin-card">
         <div className="signin-copy">
           <h1>Scrawl <em>it out.</em></h1>
-          <p>A sketchy whiteboard for napkin ideas. Sign in and your boards follow you to any device. Each person sees only their own boards.</p>
+          {sharedLink
+            ? <p className="signin-shared">Someone shared a board with you. Sign in with the Google account they invited to open it.</p>
+            : <p>A sketchy whiteboard for napkin ideas. Sign in and your boards follow you to any device, and share them with the people you choose.</p>}
           <button className="google-btn" onClick={google} disabled={busy}>
             <GoogleG /> {busy ? 'Opening Google…' : 'Continue with Google'}
           </button>
           {error && <p className="signin-error" role="alert">{error}</p>}
-          <button className="guest-link" onClick={onGuest}>Try it without an account</button>
-          <p className="signin-note">Without an account, boards stay in this browser only.</p>
+          {!sharedLink && <button className="guest-link" onClick={onGuest}>Try it without an account</button>}
+          {!sharedLink && <p className="signin-note">Without an account, boards stay in this browser only.</p>}
         </div>
         <div className="signin-art">{art && <img src={art} alt="A sample board: sketch the idea, check it still makes sense, ship it" />}</div>
       </div>

@@ -119,7 +119,7 @@ export function Footer({ snap, engine, hint, stylesOpen, onToggleStyles, onHelp 
           <button id="zoomLabel" title="Reset zoom" onClick={() => engine.resetZoom()}>{Math.round(snap.zoom * 100)}%</button>
           <button className="icon-btn" aria-label="Zoom in" onClick={() => engine.zoomIn()}>{UiIcons.plus}</button>
         </div>
-        <div className="island">
+        <div className="island" hidden={snap.readOnly}>
           <button className="icon-btn" aria-label="Undo" disabled={!snap.canUndo} onClick={() => engine.undo()}>{UiIcons.undo}</button>
           <button className="icon-btn" aria-label="Redo" disabled={!snap.canRedo} onClick={() => engine.redo()}>{UiIcons.redo}</button>
         </div>
