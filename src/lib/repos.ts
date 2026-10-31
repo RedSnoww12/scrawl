@@ -52,10 +52,17 @@ export interface Room { move(c: Cursor): void; leave(): void }
 // what arrives from other browsers is untrusted: keep only well-formed values
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+// only Google profile pictures: any other address would tell its server who has the board open
+function googleAvatar(v: unknown): string | undefined {
+  try {
+    const u = new URL(str(v, 500));
+    return u.protocol === 'https:' && /^lh[3-6]\.googleusercontent\.com$/.test(u.hostname) ? u.href : undefined;
+  } catch { return undefined; }
+}
 function readPeer(key: string, v: Record<string, unknown>): Peer | null {
-  const userId = str(v.userId, 64), avatar = str(v.avatar, 500);
+  const userId = str(v.userId, 64);
   if (!userId) return null;
-  return { key, userId, name: str(v.name, 60) || 'Someone', avatar: avatar.startsWith('https://') ? avatar : undefined };
+  return { key, userId, name: str(v.name, 60) || 'Someone', avatar: googleAvatar(v.avatar) };
 }
 function readCursor(v: Record<string, unknown>): { key: string; c: Cursor } | null {
   const key = str(v.key, 40), x = num(v.x), y = num(v.y);
