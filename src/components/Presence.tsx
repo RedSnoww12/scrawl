@@ -17,7 +17,7 @@ export function colorFor(userId: string): string {
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
-/** Name and picture from the Google account; the email stays private. */
+/** Name and picture from the Google account. */
 export function profile(user: User): { name: string; avatar?: string } {
   const meta = (user.user_metadata || {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
   return { name: meta.full_name || meta.name || '', avatar: meta.avatar_url || meta.picture };
@@ -55,14 +55,8 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
   const userId = user?.id;
   useEffect(() => {
     if (!sharing || !boardId || !user) return;
-    let count = 0;
-    const { name, avatar } = profile(user);
-    const room = sharing.room(boardId, { userId: user.id, name: name || 'Someone', avatar }, {
-      peers(list) {
-        setPeers(list);
-        if (list.length > count) send(); // show newcomers where we are without waiting for the next move
-        count = list.length;
-      },
+    const room = sharing.room(boardId, user.id, {
+      peers: setPeers,
       cursor: (key, c) => setCursors(cs => ({ ...cs, [key]: c })),
     });
     roomRef.current = room;
@@ -72,7 +66,7 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
       mine.current = { ...mine.current, text: '' };
       setPeers([]); setCursors({}); setComment(null);
     };
-  }, [sharing, boardId, userId, send]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sharing, boardId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // follow this person's pointer, in board coordinates so it lands on the same spot on every screen
   const live = !!(engine && sharing && boardId && userId);
