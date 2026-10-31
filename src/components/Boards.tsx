@@ -90,9 +90,9 @@ function BoardRow({ board, current, folders, cloud, onOpen, onRename, onDelete, 
   );
 }
 
-interface FolderProps { folder: Folder; count: number; collapsed: boolean; onToggle: () => void; onRename: (name: string) => void; onDelete: () => void; children: ReactNode }
+interface FolderProps { folder: Folder; count: number; collapsed: boolean; searching: boolean; onToggle: () => void; onRename: (name: string) => void; onDelete: () => void; children: ReactNode }
 
-function FolderGroup({ folder, count, collapsed, onToggle, onRename, onDelete, children }: FolderProps) {
+function FolderGroup({ folder, count, collapsed, searching, onToggle, onRename, onDelete, children }: FolderProps) {
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   return (
@@ -101,7 +101,7 @@ function FolderGroup({ folder, count, collapsed, onToggle, onRename, onDelete, c
         {renaming ? (
           <NameField value={folder.name} max={60} label="Folder name" onDone={name => { setRenaming(false); if (name) onRename(name); }} />
         ) : (
-          <button className="folder-toggle" aria-expanded={!collapsed} onClick={onToggle}>
+          <button className="folder-toggle" disabled={searching} aria-expanded={!collapsed} onClick={onToggle}>
             <span className="chev" data-collapsed={collapsed}>{UiIcons.chevron}</span>
             {UiIcons.folder}<span className="f-name">{folder.name}</span><span className="f-count">{count}</span>
           </button>
@@ -131,6 +131,7 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
   const [filter, setFilter] = useState<Filter>(() => (cloud && prefs.getFlag<Filter>('board-filter')) || 'all');
   const [collapsed, setCollapsed] = useState<string[]>(() => prefs.getFlag<string[]>('folders-collapsed') || []);
   const [naming, setNaming] = useState(false);
+  const [search, setSearch] = useState('');
   const pickFilter = (f: Filter) => { setFilter(f); prefs.setFlag('board-filter', f); };
   const toggle = (id: string) => setCollapsed(c => {
     const next = c.includes(id) ? c.filter(x => x !== id) : [...c, id];
@@ -139,7 +140,8 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
   });
 
   const sharedCount = boards.filter(b => b.role !== 'owner').length;
-  const shown = boards.filter(b => filter === 'all' || (filter === 'mine') === (b.role === 'owner'));
+  const query = search.trim().toLowerCase();
+  const shown = boards.filter(b => (filter === 'all' || (filter === 'mine') === (b.role === 'owner')) && b.name.toLowerCase().includes(query));
   const known = new Set(folders.map(f => f.id));
   const loose = shown.filter(b => !b.folder_id || !known.has(b.folder_id));
   const row = (b: Board) => <BoardRow key={b.id} board={b} current={b.id === currentId} folders={folders} cloud={cloud} {...actions} />;
@@ -160,6 +162,11 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
           ))}
         </div>
       )}
+      <label className="bp-search">
+        <span>Search boards</span>
+        <input type="search" value={search} placeholder="Board name" onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setSearch(''); } }} />
+      </label>
       <ul id="boardList">
         {naming && (
           <li className="folder"><div className="row-main folder-head">
@@ -168,9 +175,9 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
         )}
         {folders.map(f => {
           const inside = shown.filter(b => b.folder_id === f.id);
-          if (filter !== 'all' && !inside.length) return null;
+          if ((filter !== 'all' || query) && !inside.length) return null;
           return (
-            <FolderGroup key={f.id} folder={f} count={inside.length} collapsed={collapsed.includes(f.id)} onToggle={() => toggle(f.id)}
+            <FolderGroup key={f.id} folder={f} count={inside.length} collapsed={!query && collapsed.includes(f.id)} searching={!!query} onToggle={() => toggle(f.id)}
               onRename={name => onRenameFolder(f.id, name)} onDelete={() => onDeleteFolder(f.id)}>
               {inside.map(row)}
             </FolderGroup>
@@ -179,7 +186,8 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
         {folders.length > 0 && loose.length > 0 && <li className="bp-section">Not in a folder</li>}
         {loose.map(row)}
         {loading && !boards.length && <li className="b-empty">Loading your boards…</li>}
-        {!loading && filter === 'shared' && !sharedCount && (
+        {!loading && query && !shown.length && <li className="b-empty">No boards match your search.</li>}
+        {!loading && !query && filter === 'shared' && !sharedCount && (
           <li className="b-empty">Nothing shared with you yet. When someone shares a board with your Google address or sends you its link, it shows up here.</li>
         )}
       </ul>
