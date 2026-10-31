@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { GoogleG } from './icons';
 import { useOutside } from './Chrome';
+import { profile } from './Presence';
 
 interface AccountProps { user: User | null; onSignIn: () => void; onSignOut: () => void }
 
@@ -18,9 +19,8 @@ export function AccountButton({ user, onSignIn, onSignOut }: AccountProps) {
       </button>
     );
   }
-  const meta = (user.user_metadata || {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
-  const name = meta.full_name || meta.name || user.email || '';
-  const avatar = meta.avatar_url || meta.picture;
+  const { name: fullName, avatar } = profile(user);
+  const name = fullName || user.email || '';
   return (
     <>
       <button ref={btnRef} className="avatar-btn" aria-label="Account" aria-expanded={open} onClick={() => setOpen(o => !o)}>

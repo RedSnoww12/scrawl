@@ -36,7 +36,33 @@ export interface Sharing {
   removeMember(id: string, email: string): Promise<void>;
   /** Hear about saves made by anyone (yourself included). Returns an unsubscribe function. */
   subscribe(id: string, onSave: (row: RemoteBoard) => void): () => void;
+  /** Be present on a board: see who else has it open, where their pointer is and what they are saying. */
+  room(id: string, me: PeerInfo, on: RoomEvents): Room;
 }
+
+/** What other people see about you while you have a board open. */
+export interface PeerInfo { userId: string; name: string; avatar?: string }
+/** Someone with the board open right now, in one browser tab (`key`). */
+export interface Peer extends PeerInfo { key: string }
+/** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it. */
+export interface Cursor { x: number | null; y: number; text: string }
+export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void }
+export interface Room { move(c: Cursor): void; leave(): void }
+
+// what arrives from other browsers is untrusted: keep only well-formed values
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+function readPeer(key: string, v: Record<string, unknown>): Peer | null {
+  const userId = str(v.userId, 64), avatar = str(v.avatar, 500);
+  if (!userId) return null;
+  return { key, userId, name: str(v.name, 60) || 'Someone', avatar: avatar.startsWith('https://') ? avatar : undefined };
+}
+function readCursor(v: Record<string, unknown>): { key: string; c: Cursor } | null {
+  const key = str(v.key, 40), x = num(v.x), y = num(v.y);
+  if (!key) return null;
+  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT) } };
+}
+export const MAX_COMMENT = 140;
 
 export interface Repo {
   kind: 'local' | 'cloud';
@@ -199,6 +225,32 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             p => onSave(p.new as RemoteBoard))
           .subscribe();
         return () => { void supabase.removeChannel(channel); };
+      },
+      // A private channel per board: the policies in schema.sql let in only people who can open it.
+      room(id, me, on) {
+        const key = uid();
+        let ready = false;
+        const channel = supabase.channel('presence:' + id, { config: { private: true, presence: { key } } });
+        channel
+          .on('presence', { event: 'sync' }, () => {
+            const state = channel.presenceState<Record<string, unknown>>();
+            on.peers(Object.entries(state).flatMap(([k, metas]) => {
+              const p = k !== key && metas[0] ? readPeer(k, metas[0]) : null;
+              return p && p.userId !== me.userId ? [p] : []; // your other tabs are not other people
+            }));
+          })
+          .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+            const m = payload && typeof payload === 'object' ? readCursor(payload as Record<string, unknown>) : null;
+            if (m) on.cursor(m.key, m.c);
+          })
+          .subscribe(status => {
+            ready = status === 'SUBSCRIBED';
+            if (ready) void channel.track({ ...me });
+          });
+        return {
+          move(c) { if (ready) void channel.send({ type: 'broadcast', event: 'cursor', payload: { key, ...c } }); },
+          leave() { ready = false; void supabase.removeChannel(channel); },
+        };
       },
     },
   };

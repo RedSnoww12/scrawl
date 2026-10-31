@@ -223,4 +223,26 @@ do $$ begin
   end if;
 end $$;
 
+-- ============================================================ live cursors
+-- Who has a board open, where their pointer is and the comments they type next to it travel
+-- over a private Realtime channel per board, 'presence:<board id>'. Nothing is stored.
+-- Only people who can open the board may join it.
+create or replace function public.can_join_room(topic text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select case
+    when topic ~ '^presence:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then public.board_role(substr(topic, 10)::uuid) is not null
+    else false
+  end
+$$;
+revoke all on function public.can_join_room(text) from public, anon;
+grant execute on function public.can_join_room(text) to authenticated;
+
+drop policy if exists "Rooms: listen" on realtime.messages;
+drop policy if exists "Rooms: send" on realtime.messages;
+create policy "Rooms: listen" on realtime.messages for select to authenticated
+  using (extension in ('broadcast', 'presence') and public.can_join_room((select realtime.topic())));
+create policy "Rooms: send" on realtime.messages for insert to authenticated
+  with check (extension in ('broadcast', 'presence') and public.can_join_room((select realtime.topic())));
+
 notify pgrst, 'reload schema';
