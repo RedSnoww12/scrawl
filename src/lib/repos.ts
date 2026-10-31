@@ -261,14 +261,15 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             .on('broadcast', { event: 'cursor' }, ({ payload }) => {
               const m = readCursor(payload);
               if (!m || !alive) return;
-              const isNew = !heard.has(m.key);
-              heard.set(m.key, { userId: u, at: Date.now() });
-              on.cursor(m.key, m.c);
+              const k = u + ':' + m.key; // keys are per sender, so nobody can take over someone else's tab
+              const isNew = !heard.has(k);
+              heard.set(k, { userId: u, at: Date.now() });
+              on.cursor(k, m.c);
               if (isNew) publish();
             })
             .on('broadcast', { event: 'bye' }, ({ payload }) => {
               const m = readCursor(payload);
-              if (m && heard.get(m.key)?.userId === u) { heard.delete(m.key); publish(); }
+              if (m && heard.delete(u + ':' + m.key)) publish();
             })
             .subscribe();
           listening.set(u, ch);
