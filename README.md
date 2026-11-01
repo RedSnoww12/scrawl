@@ -33,7 +33,7 @@ Sketch boxes, arrows and notes that look like they were drawn on a napkin, keep 
 
 **Organise**
 
-- As many boards as you like, sorted into folders.
+- As many boards as you like, sorted into folders and searchable by name.
 - Sign in with Google and your boards follow you to every device.
 - Or try it as a guest: boards stay in your browser, and you can copy them to your account later.
 
