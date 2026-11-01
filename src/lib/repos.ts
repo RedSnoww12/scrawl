@@ -69,10 +69,13 @@ function readCursor(payload: unknown): { key: string; c: Cursor } | null {
   if (!key) return null;
   return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT), away: v.away === true, view: readArea(v.view) } };
 }
+const LIMIT = 1e7;
 function readArea(v: unknown): Bounds | undefined {
   if (!v || typeof v !== 'object') return undefined;
   const a = v as Record<string, unknown>, x = num(a.x), y = num(a.y), w = num(a.w), h = num(a.h);
-  return x !== null && y !== null && w !== null && h !== null && w > 0 && h > 0 ? { x, y, w, h } : undefined;
+  // far beyond any drawing, but small enough that centering on it stays a finite number
+  const fits = (n: number | null): n is number => n !== null && Math.abs(n) <= LIMIT;
+  return fits(x) && fits(y) && fits(w) && fits(h) && w > 0 && h > 0 ? { x, y, w, h } : undefined;
 }
 export const MAX_COMMENT = 140;
 // ms: a tab that went quiet this long is no longer shown. Browsers run a background tab's timers only
