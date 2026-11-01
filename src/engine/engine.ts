@@ -4,8 +4,9 @@ import rough from 'roughjs';
 import {
   ACCENT, GRID, LH, PAPER, SHAPES, DEFAULT_STYLE, isLinear, uid, rand, clamp, bounds, unionBounds, pad, hit,
   measure, makeEl, drawEl, cacheImage, sanitizeElements, exportCanvas, exportSvg,
+  isBindable, bindMargin, nearShape, focusOf, focusPoint, edgePoint,
 } from './scene';
-import type { Bounds, ElementType, ExportOptions, Point, SceneElement, Style, StyleKey, Tool, Vec, View } from './scene';
+import type { Binding, Bounds, ElementType, ExportOptions, Point, SceneElement, Style, StyleKey, Tool, Vec, View } from './scene';
 
 export const TOOL_KEYS: Record<string, Tool> = {
   v: 'selection', 1: 'selection', h: 'hand', r: 'rectangle', 2: 'rectangle', d: 'diamond', 3: 'diamond', o: 'ellipse', 4: 'ellipse',
@@ -86,6 +87,51 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     const g = el.groupIds?.[el.groupIds.length - 1];
     return g ? elements.filter(e => e.groupIds?.includes(g)).map(e => e.id) : [el.id];
   };
+
+  // ---------- connections ----------
+  let bindHover: SceneElement | null = null; // the shape a line end would attach to if dropped now
+  /** The topmost shape a line end at `p` attaches to; a two-point line never connects a shape to itself. */
+  function bindTarget(p: Vec, line: SceneElement, other?: Binding): SceneElement | null {
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const el = elements[i];
+      if (el === line || el === editing || !isBindable(el.type) || el.w < 1 || el.h < 1) continue;
+      if (!nearShape(el, p, bindMargin(el))) continue;
+      return line.points!.length === 2 && other?.id === el.id ? null : el;
+    }
+    return null;
+  }
+  const endAt = (el: SceneElement, i: number): Vec => ({ x: el.x + el.points![i][0], y: el.y + el.points![i][1] });
+  /** Put a line's connected ends back on their shapes' edges. */
+  function route(el: SceneElement) {
+    const pts = el.points!, n = pts.length;
+    const sb = el.startBind && byId(el.startBind.id), eb = el.endBind && byId(el.endBind.id);
+    if (!sb && !eb) return;
+    const put = (i: number, q: Vec) => { pts[i] = [q.x - el.x, q.y - el.y]; };
+    // a straight line between two shapes aims from one focus to the other, so it stays centered
+    if (sb) put(0, edgePoint(sb, el.startBind!, n === 2 && eb ? focusPoint(eb, el.endBind!) : endAt(el, 1)));
+    if (eb) put(n - 1, edgePoint(eb, el.endBind!, n === 2 && sb ? focusPoint(sb, el.startBind!) : endAt(el, n - 2)));
+    touch(el);
+  }
+  /** Lines with an end on any of `ids`. */
+  const connected = (ids: Set<string>) => elements.filter(el =>
+    (el.startBind && ids.has(el.startBind.id)) || (el.endBind && ids.has(el.endBind.id)));
+  /** `moved` changed place or size: lines dragged away from their shapes let go, the rest follow. */
+  function reroute(moved: SceneElement[]) {
+    const ids = new Set(moved.map(el => el.id));
+    for (const el of moved) {
+      if (el.startBind && !ids.has(el.startBind.id)) delete el.startBind;
+      if (el.endBind && !ids.has(el.endBind.id)) delete el.endBind;
+    }
+    connected(ids).forEach(route);
+  }
+  /** Attach (or detach) end `i` of a line to whatever shape is under it. */
+  function bindEnd(el: SceneElement, i: number) {
+    const last = el.points!.length - 1;
+    if (i !== 0 && i !== last) return;
+    const key = i === 0 ? 'startBind' : 'endBind', p = endAt(el, i);
+    const t = bindTarget(p, el, i === 0 ? el.endBind : el.startBind);
+    if (t) el[key] = focusOf(t, p); else delete el[key];
+  }
 
   // ---------- notifications ----------
   let changeRaf = 0;
@@ -174,6 +220,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       if (g) draw(g);
     }
     for (const g of ghosts.values()) wakeAt(g.until);
+    if (bindHover) drawBindHover(bindHover);
     drawSelection();
     if (drag && drag.mode === 'box') {
       const { start: a, cur: b } = drag;
@@ -193,6 +240,16 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     if (!small) hs.push(['n', b.x + b.w / 2, b.y], ['e', b.x + b.w, b.y + b.h / 2], ['s', b.x + b.w / 2, b.y + b.h], ['w', b.x, b.y + b.h / 2]);
     return hs.map(([name, x, y]) => ({ name, x, y }));
   }
+  function drawBindHover(el: SceneElement) {
+    const m = 5 / st.zoom, { x, y, w, h } = el;
+    ctx.save(); ctx.strokeStyle = 'rgba(47,91,234,.35)'; ctx.lineWidth = 6 / st.zoom; ctx.beginPath();
+    if (el.type === 'ellipse') ctx.ellipse(x + w / 2, y + h / 2, w / 2 + m, h / 2 + m, 0, 0, Math.PI * 2);
+    else if (el.type === 'diamond') {
+      const d = m * Math.SQRT2;
+      ctx.moveTo(x + w / 2, y - d); ctx.lineTo(x + w + d, y + h / 2); ctx.lineTo(x + w / 2, y + h + d); ctx.lineTo(x - d, y + h / 2); ctx.closePath();
+    } else ctx.roundRect(x - m, y - m, w + 2 * m, h + 2 * m, el.type === 'rectangle' && el.round ? Math.min(Math.min(w, h) * 0.25, 32) : 2 / st.zoom);
+    ctx.stroke(); ctx.restore();
+  }
   function drawSelection() {
     const sel = selected(); if (!sel.length) return;
     const z = st.zoom; ctx.lineWidth = 1 / z; ctx.strokeStyle = ACCENT;
@@ -203,9 +260,11 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       ctx.setLineDash([]);
     }
     if (!lin) { const b = pad(unionBounds(sel), 6 / z); ctx.strokeRect(b.x, b.y, b.w, b.h); }
-    const s = 8 / z;
+    const s = 8 / z, last = lin ? lin.points!.length - 1 : -1;
     for (const h of handles()) {
-      ctx.fillStyle = '#fff'; ctx.beginPath();
+      // a connected end is filled in
+      const bound = lin && ((h.name === 'p0' && lin.startBind) || (h.name === 'p' + last && lin.endBind));
+      ctx.fillStyle = bound ? ACCENT : '#fff'; ctx.beginPath();
       if (lin) ctx.arc(h.x, h.y, s * 0.6, 0, Math.PI * 2); else ctx.roundRect(h.x - s / 2, h.y - s / 2, s, s, 2 / z);
       ctx.fill(); ctx.stroke();
     }
@@ -214,6 +273,12 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
   // ---------- history ----------
   let undoStack: string[] = [], redoStack: string[] = [], lastSnap = '[]';
   function commit() {
+    // a line keeps no connection to a shape that is gone
+    const ids = new Set(elements.map(el => el.id));
+    for (const el of elements) {
+      if (el.startBind && !ids.has(el.startBind.id)) delete el.startBind;
+      if (el.endBind && !ids.has(el.endBind.id)) delete el.endBind;
+    }
     const s = JSON.stringify(elements);
     if (s === lastSnap) return;
     undoStack.push(lastSnap); if (undoStack.length > 150) undoStack.shift();
@@ -282,6 +347,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       return;
     }
     const sp = snapPt(p), el = makeEl(st.tool as ElementType, sp, st.style);
+    if (isLinear(el.type)) { const t = bindTarget(sp, el); if (t) el.startBind = focusOf(t, sp); }
     elements.push(el); st.sel.clear();
     drag = { mode: 'create', el, start: sp };
     emit();
@@ -331,14 +397,21 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
         const first = drag.orig.values().next().value;
         if (st.grid && first) { dx = snap(first.x + dx) - first.x; dy = snap(first.y + dy) - first.y; }
         for (const [id, o] of drag.orig) { const el = byId(id); if (el) { el.x = o.x + dx; el.y = o.y + dy; } }
-        drag.moved = dx !== 0 || dy !== 0; break;
+        drag.moved = dx !== 0 || dy !== 0;
+        if (drag.moved) reroute(selected());
+        break;
       }
-      case 'resize': moveResize(e, p, drag); break;
+      case 'resize': moveResize(e, p, drag); reroute(selected()); break;
       case 'point': {
         const el = drag.el, pts = el.points!, other = pts[drag.idx === 0 ? 1 : 0];
         let q = { x: snap(p.x) - el.x, y: snap(p.y) - el.y };
         if (e.shiftKey) q = snapAngle(other, q);
-        pts[drag.idx] = [q.x, q.y]; touch(el); drag.changed = true; break;
+        pts[drag.idx] = [q.x, q.y];
+        // the dragged end lets go until it is dropped; the other end keeps following its shape
+        const last = pts.length - 1;
+        if (drag.idx === 0) delete el.startBind; else if (drag.idx === last) delete el.endBind;
+        bindHover = drag.idx === 0 || drag.idx === last ? bindTarget(endAt(el, drag.idx), el, drag.idx === 0 ? el.endBind : el.startBind) : null;
+        route(el); touch(el); drag.changed = true; break;
       }
       case 'box': {
         drag.cur = p;
@@ -359,10 +432,12 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
   /** The shapes the current gesture is changing, or null when it changes none (yet). */
   function gestureEls(): SceneElement[] | null {
     if (editing) return [editing];
+    // moving a shape also moves the lines connected to it
+    const withLines = (sel: SceneElement[]) => { const ids = new Set(sel.map(el => el.id)); return [...sel, ...connected(ids).filter(el => !ids.has(el.id))]; };
     switch (drag?.mode) {
       case 'create': case 'point': return [drag.el];
-      case 'move': return drag.moved ? selected() : null;
-      case 'resize': return drag.changed ? selected() : null;
+      case 'move': return drag.moved ? withLines(selected()) : null;
+      case 'resize': return drag.changed ? withLines(selected()) : null;
       default: return null;
     }
   }
@@ -386,6 +461,8 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       let r = { x: q.x - el.x, y: q.y - el.y };
       if (e.shiftKey) r = snapAngle([0, 0], r);
       el.points![1] = [r.x, r.y];
+      route(el); // a start on a shape slides along its edge to face the pointer
+      bindHover = bindTarget(endAt(el, 1), el, el.startBind);
     } else {
       let dx = q.x - s.x, dy = q.y - s.y;
       if (e.shiftKey) { const m = Math.max(Math.abs(dx), Math.abs(dy)); dx = Math.sign(dx || 1) * m; dy = Math.sign(dy || 1) * m; }
@@ -427,18 +504,20 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     if (pinch) { if (pointers.size < 2) pinch = null; return; }
     if (!drag) return;
     const touched = gestureEls();
-    const d = drag; drag = null;
+    const d = drag; drag = null; bindHover = null;
     switch (d.mode) {
       case 'pan': setCursor(toolCursor()); break;
       case 'create': {
         const el = d.el, b = bounds(el);
         const tiny = el.type === 'freedraw' ? false : isLinear(el.type) ? Math.hypot(b.w, b.h) < 4 : el.w < 4 && el.h < 4;
         if (tiny) { elements = elements.filter(x => x !== el); break; }
+        if (isLinear(el.type)) { bindEnd(el, el.points!.length - 1); route(el); }
         if (el.type !== 'freedraw') { st.sel = new Set([el.id]); if (!st.locked) setTool('selection', true); }
         commit(); break;
       }
       case 'move': if (d.moved) commit(); break;
-      case 'resize': case 'point': if (d.changed) commit(); break;
+      case 'resize': if (d.changed) commit(); break;
+      case 'point': if (d.changed) { bindEnd(d.el, d.idx); route(d.el); commit(); } break;
       case 'erase':
         if (erasing.size) { elements = elements.filter(el => !erasing.has(el.id)); erasing.clear(); commit(); }
         break;
@@ -449,7 +528,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
   function eraseAt(p: Vec) { for (const el of elements) if (hit(el, p, st.zoom)) groupOf(el).forEach(id => erasing.add(id)); }
   function startPinch() {
     if (drag && drag.mode === 'create') { const el = drag.el; elements = elements.filter(x => x !== el); liveDone([el]); }
-    drag = null;
+    drag = null; bindHover = null;
     const [a, b] = [...pointers.values()], r = rect();
     pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: st.zoom, mid: toWorld((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top) };
     redraw();
@@ -546,10 +625,16 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
   }
   function deleteSel() { if (!st.sel.size) return; elements = elements.filter(el => !st.sel.has(el.id)); st.sel.clear(); commit(); redraw(); }
   function cloneEls(els: SceneElement[], offset: number): SceneElement[] {
-    const gmap = new Map<string, string>();
+    const gmap = new Map<string, string>(), ids = new Map(els.map(el => [el.id, uid()]));
+    // a copied line stays connected only to shapes copied with it
+    const rebind = (b: Binding | undefined) => (b && ids.has(b.id) ? { ...b, id: ids.get(b.id)! } : undefined);
     return els.map(el => {
-      const c = structuredClone(el); c.id = uid(); c.seed = rand(); c.x += offset; c.y += offset;
+      const c = structuredClone(el); c.id = ids.get(el.id)!; c.seed = rand(); c.x += offset; c.y += offset;
       c.groupIds = (c.groupIds || []).map(g => { if (!gmap.has(g)) gmap.set(g, uid()); return gmap.get(g)!; });
+      const sb = rebind(c.startBind), eb = rebind(c.endBind);
+      delete c.startBind; delete c.endBind;
+      if (sb) c.startBind = sb;
+      if (eb) c.endBind = eb;
       return c;
     });
   }
@@ -583,7 +668,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     }
     commit(); redraw();
   }
-  function nudge(dx: number, dy: number) { selected().forEach(el => { el.x += dx; el.y += dy; }); commit(); redraw(); }
+  function nudge(dx: number, dy: number) { selected().forEach(el => { el.x += dx; el.y += dy; }); reroute(selected()); commit(); redraw(); }
   function pasteEls(els: SceneElement[]) {
     const clones = cloneEls(els, 0), b = unionBounds(clones);
     clones.forEach(c => { c.x += lastWorld.x - (b.x + b.w / 2); c.y += lastWorld.y - (b.y + b.h / 2); });
@@ -722,7 +807,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     load({ elements: els = [], view = null }: { elements?: unknown; view?: View | null } = {}) {
       if (editing) { editing = null; ta.hidden = true; }
       elements = sanitizeElements(els); lastSnap = JSON.stringify(elements); undoStack = []; redoStack = [];
-      st.sel.clear(); erasing.clear(); ghosts.clear(); drag = null;
+      st.sel.clear(); erasing.clear(); ghosts.clear(); drag = null; bindHover = null;
       if (view && Number.isFinite(view.zoom)) { st.sx = view.sx; st.sy = view.sy; st.zoom = clamp(view.zoom, 0.1, 10); viewChanged(false); }
       else zoomToFit(false, 1);
       emit(); redraw();

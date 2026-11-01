@@ -18,12 +18,16 @@ export interface Style {
 }
 export type StyleKey = keyof Style;
 
+/** A line end attached to a shape: it aims at (fx, fy), from -1 to 1 across the shape around its center. */
+export interface Binding { id: string; fx: number; fy: number }
+
 export interface SceneElement {
   id: string; type: ElementType;
   x: number; y: number; w: number; h: number;
   stroke: string; bg: string; fill: FillStyle; sw: number; ss: StrokeStyle; rough: number; round: boolean; opacity: number;
   seed: number; v: number; groupIds: string[];
   points?: Point[];                                 // line, arrow, freedraw: relative to x, y
+  startBind?: Binding; endBind?: Binding;           // line, arrow: the shapes its ends are connected to
   text?: string; fontSize?: number; align?: 'left' | 'center'; // text
   src?: string;                                     // image: a data: URL
   // only while a new label is being typed
@@ -99,6 +103,64 @@ export function hit(el: SceneElement, p: Vec, zoom: number): boolean {
   }
 }
 
+// ---------- connections ----------
+// Same model as Excalidraw's arrow binding: an end remembers the shape and a point inside it to aim
+// at, and is put back on the shape's edge (plus a small gap) whenever either side moves.
+export const isBindable = (t: string): boolean => SHAPES.has(t) || t === 'image';
+const BIND_GAP = 6;
+/** How far outside a shape a line end still snaps to it. */
+export function bindMargin(el: SceneElement): number {
+  const r = el.type === 'diamond' ? Math.SQRT1_2 : 1;
+  return Math.max(16, Math.min(0.25 * r * Math.min(el.w, el.h), 32));
+}
+export function nearShape(el: SceneElement, p: Vec, m: number): boolean {
+  const rx = el.w / 2, ry = el.h / 2, dx = Math.abs(p.x - el.x - rx), dy = Math.abs(p.y - el.y - ry);
+  if (el.type === 'ellipse') return Math.hypot(dx / (rx + m), dy / (ry + m)) <= 1;
+  if (el.type === 'diamond') return dx / (rx + m * Math.SQRT2) + dy / (ry + m * Math.SQRT2) <= 1;
+  return dx <= rx + m && dy <= ry + m;
+}
+/** The binding for a line end dropped at `p`, aiming at that spot (pulled inside the shape). */
+export function focusOf(el: SceneElement, p: Vec): Binding {
+  let u = el.w ? (p.x - el.x - el.w / 2) / (el.w / 2) : 0, v = el.h ? (p.y - el.y - el.h / 2) / (el.h / 2) : 0;
+  const n = el.type === 'ellipse' ? Math.hypot(u, v) : el.type === 'diamond' ? Math.abs(u) + Math.abs(v) : Math.max(Math.abs(u), Math.abs(v));
+  if (n > 0.9) { u *= 0.9 / n; v *= 0.9 / n; }
+  return { id: el.id, fx: u, fy: v };
+}
+export const focusPoint = (el: SceneElement, b: Binding): Vec => ({ x: el.x + el.w / 2 * (1 + b.fx), y: el.y + el.h / 2 * (1 + b.fy) });
+/** How far along a→a+d the ray first enters the shape's outline (0..1), or null if it starts inside or misses. */
+function entryT(el: SceneElement, a: Vec, dx: number, dy: number): number | null {
+  const { x, y, w, h } = el;
+  if (el.type === 'ellipse') {
+    const rx = w / 2, ry = h / 2;
+    if (rx < 1e-6 || ry < 1e-6) return null;
+    const ox = (a.x - x - rx) / rx, oy = (a.y - y - ry) / ry, ux = dx / rx, uy = dy / ry;
+    const A = ux * ux + uy * uy, B = 2 * (ox * ux + oy * uy), C = ox * ox + oy * oy - 1, disc = B * B - 4 * A * C;
+    if (C <= 0 || disc < 0) return null;
+    const t = (-B - Math.sqrt(disc)) / (2 * A);
+    return t >= 0 && t <= 1 ? t : null;
+  }
+  const pts: Point[] = el.type === 'diamond'
+    ? [[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h / 2]]
+    : [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  if (inPoly(a, pts)) return null;
+  let best: number | null = null;
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], q = pts[(i + 1) % 4], ex = q[0] - p[0], ey = q[1] - p[1], den = dx * ey - dy * ex;
+    if (!den) continue;
+    const rx = p[0] - a.x, ry = p[1] - a.y, t = (rx * ey - ry * ex) / den, s = (rx * dy - ry * dx) / den;
+    if (t >= 0 && t <= 1 && s >= 0 && s <= 1 && (best === null || t < best)) best = t;
+  }
+  return best;
+}
+/** Where a line coming from `from` and aiming at the binding's focus stops: just outside the shape. */
+export function edgePoint(el: SceneElement, b: Binding, from: Vec): Vec {
+  const f = focusPoint(el, b), dx = f.x - from.x, dy = f.y - from.y, len = Math.hypot(dx, dy);
+  const t = len > 1e-6 ? entryT(el, from, dx, dy) : null;
+  if (t === null) return f;
+  const tt = Math.max(0, t - BIND_GAP / len);
+  return { x: from.x + dx * tt, y: from.y + dy * tt };
+}
+
 // ---------- elements ----------
 export function measure(el: SceneElement): void {
   const fs = el.fontSize ?? DEFAULT_STYLE.fontSize;
@@ -125,6 +187,11 @@ const COLOR = /^(#[0-9a-f]{3,8}|transparent)$/i;
 const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const oneOf = <T extends string>(v: unknown, opts: readonly T[], d: T): T => (opts.includes(v as T) ? (v as T) : d);
+function bindingOf(v: unknown): Binding | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const b = v as Record<string, unknown>;
+  return typeof b.id === 'string' && b.id.length <= 40 ? { id: b.id, fx: clamp(num(b.fx), -1, 1), fy: clamp(num(b.fy), -1, 1) } : undefined;
+}
 export function sanitizeElements(list: unknown): SceneElement[] {
   if (!Array.isArray(list)) return [];
   return list.slice(0, 20000).flatMap((raw: unknown): SceneElement[] => {
@@ -147,6 +214,11 @@ export function sanitizeElements(list: unknown): SceneElement[] {
         : [];
       if (pts.length < (el.type === 'freedraw' ? 1 : 2)) return [];
       el.points = pts.slice(0, 50000);
+      if (isLinear(el.type)) {
+        const sb = bindingOf(o.startBind), eb = bindingOf(o.endBind);
+        if (sb) el.startBind = sb;
+        if (eb) el.endBind = eb;
+      }
     }
     if (el.type === 'text') {
       if (!str(o.text)) return [];
@@ -304,21 +376,27 @@ export function exportSvg(els: SceneElement[], { background = true }: ExportOpti
 export function sampleScene(): SceneElement[] {
   const base: Style = { ...DEFAULT_STYLE, rough: 1, sw: 2, ss: 'solid', opacity: 100, round: true, stroke: '#1f2328' };
   const els: SceneElement[] = [];
-  const label = (box: SceneElement, text: string, fs = 24) => {
+  const label = (box: SceneElement, text: string, fs = 24): SceneElement => {
     const t = makeEl('text', { x: 0, y: 0 }, base, { text, fontSize: fs, align: 'center', stroke: box.stroke });
     t.x = box.x + box.w / 2 - t.w / 2; t.y = box.y + box.h / 2 - t.h / 2;
     const g = uid(); box.groupIds = [g]; t.groupIds = [g];
     els.push(box, t);
+    return box;
+  };
+  const connect = (from: SceneElement, to: SceneElement, at: Vec, over: Partial<SceneElement>) => {
+    const a = makeEl('arrow', at, base, over), pts = a.points!, end = pts[pts.length - 1];
+    a.startBind = focusOf(from, at); a.endBind = focusOf(to, { x: at.x + end[0], y: at.y + end[1] });
+    els.push(a);
   };
   const title = makeEl('text', { x: 80, y: 30 }, base, { text: 'Saturday side-project, on a napkin', fontSize: 40 });
   els.push(title);
   els.push(makeEl('freedraw', { x: 84, y: 92 }, base, { stroke: '#e8590c', points: Array.from({ length: 70 }, (_, i): Point => [i * (title.w - 10) / 69, Math.sin(i * 0.45) * 2.5]) }));
-  label(makeEl('rectangle', { x: 80, y: 160 }, base, { w: 220, h: 110, bg: '#ffec99', fill: 'hachure' }), 'Sketch the idea');
-  label(makeEl('diamond', { x: 400, y: 140 }, base, { w: 230, h: 150, bg: '#a5d8ff', fill: 'cross-hatch', stroke: '#1864ab' }), 'Does it\nstill make sense?', 22);
-  label(makeEl('ellipse', { x: 730, y: 160 }, base, { w: 220, h: 110, bg: '#b2f2bb', fill: 'solid', stroke: '#2b8a3e' }), 'Ship it!');
-  els.push(makeEl('arrow', { x: 308, y: 215 }, base, { points: [[0, 0], [86, 0]] }));
-  els.push(makeEl('arrow', { x: 636, y: 215 }, base, { points: [[0, 0], [88, 0]] }));
-  els.push(makeEl('arrow', { x: 515, y: 296 }, base, { stroke: '#c92a2a', ss: 'dashed', points: [[0, 0], [-300, 80], [-325, -18]] }));
+  const idea = label(makeEl('rectangle', { x: 80, y: 160 }, base, { w: 220, h: 110, bg: '#ffec99', fill: 'hachure' }), 'Sketch the idea');
+  const check = label(makeEl('diamond', { x: 400, y: 140 }, base, { w: 230, h: 150, bg: '#a5d8ff', fill: 'cross-hatch', stroke: '#1864ab' }), 'Does it\nstill make sense?', 22);
+  const ship = label(makeEl('ellipse', { x: 730, y: 160 }, base, { w: 220, h: 110, bg: '#b2f2bb', fill: 'solid', stroke: '#2b8a3e' }), 'Ship it!');
+  connect(idea, check, { x: 308, y: 215 }, { points: [[0, 0], [86, 0]] });
+  connect(check, ship, { x: 636, y: 215 }, { points: [[0, 0], [88, 0]] });
+  connect(check, idea, { x: 515, y: 296 }, { stroke: '#c92a2a', ss: 'dashed', points: [[0, 0], [-300, 80], [-325, -18]] });
   els.push(makeEl('text', { x: 330, y: 360 }, base, { text: 'no? back to the napkin', fontSize: 20, stroke: '#c92a2a' }));
   els.push(makeEl('text', { x: 80, y: 450 }, base, { text: 'This board is a sample. Press 2 and drag to add a box,\nor double-click anywhere to write.', fontSize: 20, stroke: '#5d6577' }));
   return els;
