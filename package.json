@@ -10,6 +10,9 @@
   },
   "homepage": "https://scrawl-seven.vercel.app",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
