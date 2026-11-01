@@ -1,6 +1,6 @@
 # Contributing to Scrawl
 
-Thanks for helping. Bug fixes, new drawing tools, accessibility and translation work are all welcome.
+Thanks for helping. Bug fixes, new drawing tools and accessibility work are all welcome.
 
 ## Before you start
 
