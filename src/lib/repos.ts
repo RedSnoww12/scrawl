@@ -1,6 +1,6 @@
 // Two places boards can live, behind one interface.
 import { uid } from '../engine/scene';
-import type { SceneElement, Style, View } from '../engine/scene';
+import type { Bounds, SceneElement, Style, View } from '../engine/scene';
 import type { SupabaseClient } from './supabase';
 
 /** What the signed-in person may do with a board. */
@@ -45,8 +45,9 @@ export interface PeerInfo { userId: string; name: string; avatar?: string }
 /** Someone with the board open right now, in one browser tab (`key`). */
 export interface Peer extends PeerInfo { key: string }
 /** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it.
- *  `away`: that tab is in the background, so the person is still connected but not looking. */
-export interface Cursor { x: number | null; y: number; text: string; away?: boolean }
+ *  `away`: that tab is in the background, so the person is still connected but not looking.
+ *  `view`: the part of the board on their screen, so others can look through their eyes. */
+export interface Cursor { x: number | null; y: number; text: string; away?: boolean; view?: Bounds }
 /** Shapes someone is drawing, moving or typing right now. `els` is untrusted and not sanitized yet. */
 export interface LiveEdit { els: unknown; done: boolean; dropped: string[] }
 export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void; draw(key: string, e: LiveEdit): void }
@@ -66,7 +67,12 @@ function readCursor(payload: unknown): { key: string; c: Cursor } | null {
   if (!payload || typeof payload !== 'object') return null;
   const v = payload as Record<string, unknown>, key = str(v.key, 40), x = num(v.x), y = num(v.y);
   if (!key) return null;
-  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT), away: v.away === true } };
+  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT), away: v.away === true, view: readArea(v.view) } };
+}
+function readArea(v: unknown): Bounds | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const a = v as Record<string, unknown>, x = num(a.x), y = num(a.y), w = num(a.w), h = num(a.h);
+  return x !== null && y !== null && w !== null && h !== null && w > 0 && h > 0 ? { x, y, w, h } : undefined;
 }
 export const MAX_COMMENT = 140;
 // ms: a tab that went quiet this long is no longer shown. Browsers run a background tab's timers only
