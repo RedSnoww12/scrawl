@@ -1,0 +1,16 @@
+# Groups the notes GitHub writes when you press "Generate release notes" on a new release.
+# A pull request lands in the first section whose label it carries.
+changelog:
+  exclude:
+    labels: [skip-changelog, duplicate, invalid, wontfix]
+  categories:
+    - title: ✨ New
+      labels: [enhancement]
+    - title: 🐛 Fixed
+      labels: [bug]
+    - title: ♿ Accessibility
+      labels: [accessibility]
+    - title: 📝 Docs
+      labels: [documentation]
+    - title: 🧰 Other changes
+      labels: ["*"]

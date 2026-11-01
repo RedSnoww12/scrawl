@@ -29,10 +29,27 @@ Guest mode works without any backend. To work on sign-in, sharing or saving onli
 3. If you change `supabase/schema.sql`, keep it safe to run more than once (`if not exists`, `drop policy if exists`, `create or replace`). Every table needs row-level security.
 4. Run `npm run build` (type-check and build) and try your change in the browser, in both light and dark mode, and at phone width.
 5. Open a pull request. Say what changed and how you tested it, and add a screenshot or short clip for visible changes.
+6. Label it so it lands in the right part of the release notes: `enhancement` for something new, `bug` for a fix, `accessibility` or `documentation` where they fit, or `skip-changelog` to leave it out. If you can't set labels, a maintainer will.
+7. For a change people will notice, add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
 
 ## Commit messages
 
 Short, imperative and specific: `Fix arrow heads on zero-length lines`, not `fixes`.
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
+
+- **Patch** (`1.0.1`): fixes only.
+- **Minor** (`1.1.0`): new features that keep existing boards and links working.
+- **Major** (`2.0.0`): anything that breaks them, such as a schema change older clients can't read.
+
+To cut a release (maintainers):
+
+1. On a branch, set the new version in `package.json` (`npm version 1.1.0 --no-git-tag-version`), move the `[Unreleased]` entries in `CHANGELOG.md` under a new heading for that version, and merge the pull request.
+2. On GitHub, draft a new release on `main` with a new tag `v1.1.0`, press **Generate release notes**, edit if needed, and publish.
+
+The app shows its version at the bottom of the Keyboard shortcuts dialog, so people can tell which release they're running.
 
 ## Be kind
 
