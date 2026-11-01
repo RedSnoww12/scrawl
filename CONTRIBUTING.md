@@ -23,9 +23,13 @@ Guest mode works without any backend. To work on sign-in, sharing or saving onli
 ## Making a change
 
 1. Branch from `main`: `git checkout -b fix/arrow-heads`.
-2. Keep the code in the style around it:
+2. Respect the project's rules. [CLAUDE.md](CLAUDE.md) sums them up on one page, and the reasons are in the [architecture decisions](docs/adr/README.md). The ones people trip on most:
    - the engine in `src/engine/` stays free of React;
-   - the UI talks to storage only through the `Repo` interface in `src/lib/repos.ts`.
+   - the UI talks to storage only through the `Repo` interface in `src/lib/repos.ts`;
+   - access checks live in the database, not the browser;
+   - anything from outside goes through `sanitizeElements()`.
+
+   If your change needs to go against one of them, propose a new decision record in the issue first.
 3. If you change `supabase/schema.sql`, keep it safe to run more than once (`if not exists`, `drop policy if exists`, `create or replace`). Every table needs row-level security.
 4. Run `npm run build` (type-check and build) and try your change in the browser, in both light and dark mode, and at phone width.
 5. Open a pull request (see below).
