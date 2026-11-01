@@ -151,7 +151,7 @@ export function BoardsPanel({ panelRef, boards, folders, currentId, cloud, loadi
       <div className="bp-head">
         <h2>Boards</h2>
         <div className="bp-head-actions">
-          <button className="icon-btn" aria-label="New folder" title="New folder" onClick={() => setNaming(true)}>{UiIcons.folderPlus}</button>
+          <button className="icon-btn" aria-label="New folder" title="New folder" onClick={() => { setSearch(''); setNaming(true); }}>{UiIcons.folderPlus}</button>
           <button className="btn small primary" onClick={onNew}>New board</button>
         </div>
       </div>
