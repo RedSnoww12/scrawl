@@ -44,8 +44,9 @@ export interface Sharing {
 export interface PeerInfo { userId: string; name: string; avatar?: string }
 /** Someone with the board open right now, in one browser tab (`key`). */
 export interface Peer extends PeerInfo { key: string }
-/** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it. */
-export interface Cursor { x: number | null; y: number; text: string }
+/** A pointer on the board, in board coordinates; x null when it left the board. `text` is a comment typed next to it.
+ *  `away`: that tab is in the background, so the person is still connected but not looking. */
+export interface Cursor { x: number | null; y: number; text: string; away?: boolean }
 /** Shapes someone is drawing, moving or typing right now. `els` is untrusted and not sanitized yet. */
 export interface LiveEdit { els: unknown; done: boolean; dropped: string[] }
 export interface RoomEvents { peers(list: Peer[]): void; cursor(key: string, c: Cursor): void; draw(key: string, e: LiveEdit): void }
@@ -65,10 +66,12 @@ function readCursor(payload: unknown): { key: string; c: Cursor } | null {
   if (!payload || typeof payload !== 'object') return null;
   const v = payload as Record<string, unknown>, key = str(v.key, 40), x = num(v.x), y = num(v.y);
   if (!key) return null;
-  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT) } };
+  return { key, c: { x: x === null || y === null ? null : x, y: y ?? 0, text: str(v.text, MAX_COMMENT), away: v.away === true } };
 }
 export const MAX_COMMENT = 140;
-const HEARTBEAT = 10_000, STALE = 25_000; // ms: a tab that went quiet this long is no longer shown
+// ms: a tab that went quiet this long is no longer shown. Browsers run a background tab's timers only
+// about once a minute, so a person who switched tabs keeps beating, just slowly: give them room.
+const HEARTBEAT = 10_000, STALE = 150_000;
 
 export interface Repo {
   kind: 'local' | 'cloud';
@@ -259,6 +262,10 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
           }
           publish();
         };
+        const lookUpMissing = () => {
+          const unknown = [...present].filter(u => !people.has(u) && !asked.has(u));
+          if (unknown.length) void lookUp(unknown);
+        };
         const listen = (u: string) => {
           const ch = supabase.channel(`${topic}:${u}`, { config: { private: true } })
             .on('broadcast', { event: 'cursor' }, ({ payload }) => {
@@ -298,7 +305,11 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
         const draw = (els: SceneElement[], done: boolean, dropped: string[]) => {
           if (penReady) void pen.send({ type: 'broadcast', event: 'draw', payload: { key: tab, els, done, dropped } });
         };
-        const shared = supabase.channel(topic, { config: { private: true, presence: { key: tab } } });
+        // Realtime only sends the list of who is here to clients that ask for it with `enabled`; the
+        // supabase-js we use predates the flag and leaves it out, so ask explicitly (the variable keeps
+        // its older types from rejecting it). Without it nobody ever shows up.
+        const presence = { key: tab, enabled: true };
+        const shared = supabase.channel(topic, { config: { private: true, presence } });
         shared
           .on('presence', { event: 'sync' }, () => {
             const state = shared.presenceState<{ userId?: unknown }>();
@@ -308,13 +319,12 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             present = ids;
             for (const u of ids) if (!listening.has(u)) listen(u);
             for (const [u, chs] of listening) if (!ids.has(u)) { chs.forEach(ch => void supabase.removeChannel(ch)); listening.delete(u); }
-            const unknown = [...ids].filter(u => !people.has(u) && !asked.has(u));
-            if (unknown.length) void lookUp(unknown);
+            lookUpMissing();
             if (arrived.length) setTimeout(() => move(last), 1000); // once they listen, show them where we are
             publish();
           })
           .subscribe(status => { if (status === 'SUBSCRIBED') void shared.track({ userId }); });
-        const beat = window.setInterval(() => { move(last); publish(); }, HEARTBEAT);
+        const beat = window.setInterval(() => { move(last); lookUpMissing(); publish(); }, HEARTBEAT); // names that failed to load: try again
 
         return {
           move, draw,
