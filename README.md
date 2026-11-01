@@ -113,7 +113,7 @@ Press `?` in the app for the full list. The basics:
 
 ## Contributing
 
-Issues and pull requests are welcome: bug fixes, new tools, translations, accessibility. Read [CONTRIBUTING.md](CONTRIBUTING.md) to get set up, and open an issue first for big changes so we can agree on the approach.
+Issues and pull requests are welcome: bug fixes, new tools, translations, accessibility. Read [CONTRIBUTING.md](CONTRIBUTING.md) to get set up and [CLAUDE.md](CLAUDE.md) for the project's rules, with the reasons behind them in [docs/adr](docs/adr/README.md). Open an issue first for big changes so we can agree on the approach.
 
 To report a security problem, see [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
