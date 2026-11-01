@@ -28,9 +28,40 @@ Guest mode works without any backend. To work on sign-in, sharing or saving onli
    - the UI talks to storage only through the `Repo` interface in `src/lib/repos.ts`.
 3. If you change `supabase/schema.sql`, keep it safe to run more than once (`if not exists`, `drop policy if exists`, `create or replace`). Every table needs row-level security.
 4. Run `npm run build` (type-check and build) and try your change in the browser, in both light and dark mode, and at phone width.
-5. Open a pull request. Say what changed and how you tested it, and add a screenshot or short clip for visible changes.
-6. Label it so it lands in the right part of the release notes: `enhancement` for something new, `bug` for a fix, `accessibility` or `documentation` where they fit, or `skip-changelog` to leave it out. If you can't set labels, a maintainer will.
-7. For a change people will notice, add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
+5. Open a pull request (see below).
+
+## Pull requests
+
+The PR template walks you through this; here is why each part matters.
+
+**Branch name**: a prefix for the kind of change, then a few words: `feature/sticky-notes`, `fix/arrow-heads`, `docs/self-hosting`, `chore/upgrade-vite`.
+
+**Title**: it becomes a line in the release notes as written, so write it for the people using Scrawl, not for the code. Imperative, specific, no prefix or period.
+
+| ✅ | ❌ |
+|---|---|
+| `Connect arrows and lines to shapes` | `feat: connectors` |
+| `Keep collaborators visible on shared boards` | `Fix presence bug in Presence.tsx` |
+| `Show the version in the shortcuts dialog` | `Update Dialogs.tsx` |
+
+**Description**:
+- **What changed**: one or two sentences on the result, and `Closes #12` if it fixes an issue.
+- **How I tested it**: tick what you did, and add anything specific to this change (two browsers for live features, a slow network, a guest and a signed-in account).
+- **Screenshots**: a picture or short clip for anything visible. Before and after helps for fixes.
+
+**Label**: it decides where the PR lands in the release notes. If you can't set labels, a maintainer will.
+
+| Label | For | Release notes section |
+|---|---|---|
+| `enhancement` | something new people can do | ✨ New |
+| `bug` | a fix | 🐛 Fixed |
+| `accessibility` | keyboard, screen reader, contrast | ♿ Accessibility |
+| `documentation` | README, guides | 📝 Docs |
+| `skip-changelog` | CI, refactors, anything users won't notice | left out |
+
+**Changelog**: for a change people will notice, add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), in the right group (`Added`, `Changed`, `Fixed`, `Security`).
+
+**Size**: one change per pull request. A fix and an unrelated refactor are two PRs; they're easier to review and to revert. Open it as a draft if you want early feedback.
 
 ## Commit messages
 
