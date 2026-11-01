@@ -72,6 +72,11 @@ export const MAX_COMMENT = 140;
 // ms: a tab that went quiet this long is no longer shown. Browsers run a background tab's timers only
 // about once a minute, so a person who switched tabs keeps beating, just slowly: give them room.
 const HEARTBEAT = 10_000, STALE = 150_000;
+const POLL = 5000; // ms between checks for new saves while live updates are down
+// a channel that could not connect says why in the console, instead of the board silently going quiet
+const report = (what: string) => (status: string, err?: Error) => {
+  if (status !== 'SUBSCRIBED' && status !== 'CLOSED') console.warn('[scrawl live]', what, status, err?.message ?? '');
+};
 
 export interface Repo {
   kind: 'local' | 'cloud';
@@ -229,11 +234,23 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
       },
       async removeMember(id, email) { check(await supabase.from('board_members').delete().eq('board_id', id).eq('email', email)); },
       subscribe(id, onSave) {
+        // while the live channel is down, look for new saves now and then, so nobody has to edit to see them
+        let poll = 0, seen = -1, open = true;
+        const check = async () => {
+          const { data } = await boards().select('name,version').eq('id', id).maybeSingle();
+          const row = data as { name: string; version: number } | null;
+          if (row && row.version !== seen) { if (seen >= 0) onSave(row); seen = row.version; }
+        };
         const channel = supabase.channel('board:' + id)
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'boards', filter: 'id=eq.' + id },
             p => onSave(p.new as RemoteBoard))
-          .subscribe();
-        return () => { void supabase.removeChannel(channel); };
+          .subscribe((status, err) => {
+            clearInterval(poll); poll = 0;
+            if (status === 'SUBSCRIBED' || !open) return;
+            if (status !== 'CLOSED') console.warn('[scrawl live] board updates', status, err?.message ?? '');
+            void check(); poll = window.setInterval(() => void check(), POLL);
+          });
+        return () => { open = false; clearInterval(poll); void supabase.removeChannel(channel); };
       },
       // Who is here comes from one shared channel per board; what each person does travels on their
       // own channels, which the policies in schema.sql let only them send on. So a pointer, a comment,
@@ -281,7 +298,7 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
               const m = readCursor(payload);
               if (m && heard.delete(u + ':' + m.key)) publish();
             })
-            .subscribe();
+            .subscribe(report('pointer of ' + u));
           const drawing = supabase.channel(`draw:${id}:${u}`, { config: { private: true } })
             .on('broadcast', { event: 'draw' }, ({ payload }) => {
               const v = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
@@ -290,26 +307,23 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
               const dropped = Array.isArray(v.dropped) ? v.dropped.filter((d): d is string => typeof d === 'string').slice(0, 1000) : [];
               on.draw(u + ':' + key, { els: v.els, done: v.done === true, dropped });
             })
-            .subscribe();
+            .subscribe(report('drawing of ' + u));
           listening.set(u, [ch, drawing]);
         };
 
         const mine = supabase.channel(`${topic}:${userId}`, { config: { private: true } })
-          .subscribe(status => { ready = status === 'SUBSCRIBED'; if (ready) move(last); });
+          .subscribe((status, err) => { ready = status === 'SUBSCRIBED'; if (ready) move(last); else report('my pointer')(status, err); });
         const move = (c: Cursor) => {
           last = c;
           if (ready) void mine.send({ type: 'broadcast', event: 'cursor', payload: { key: tab, ...c } });
         };
         const pen = supabase.channel(`draw:${id}:${userId}`, { config: { private: true } })
-          .subscribe(status => { penReady = status === 'SUBSCRIBED'; });
+          .subscribe((status, err) => { penReady = status === 'SUBSCRIBED'; if (!penReady) report('my drawing')(status, err); });
         const draw = (els: SceneElement[], done: boolean, dropped: string[]) => {
           if (penReady) void pen.send({ type: 'broadcast', event: 'draw', payload: { key: tab, els, done, dropped } });
         };
-        // Realtime only sends the list of who is here to clients that ask for it with `enabled`; the
-        // supabase-js we use predates the flag and leaves it out, so ask explicitly (the variable keeps
-        // its older types from rejecting it). Without it nobody ever shows up.
-        const presence = { key: tab, enabled: true };
-        const shared = supabase.channel(topic, { config: { private: true, presence } });
+        // Realtime only sends the list of who is here to clients that ask for it with `enabled`
+        const shared = supabase.channel(topic, { config: { private: true, presence: { key: tab, enabled: true } } });
         shared
           .on('presence', { event: 'sync' }, () => {
             const state = shared.presenceState<{ userId?: unknown }>();
@@ -323,7 +337,7 @@ export function cloudRepo(supabase: SupabaseClient): Repo {
             if (arrived.length) setTimeout(() => move(last), 1000); // once they listen, show them where we are
             publish();
           })
-          .subscribe(status => { if (status === 'SUBSCRIBED') void shared.track({ userId }); });
+          .subscribe((status, err) => { if (status === 'SUBSCRIBED') void shared.track({ userId }); else report('who is here')(status, err); });
         const beat = window.setInterval(() => { move(last); lookUpMissing(); publish(); }, HEARTBEAT); // names that failed to load: try again
 
         return {
