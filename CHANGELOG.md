@@ -4,6 +4,10 @@ Notable changes to Scrawl. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Security
+
+- Upgrade Vite to 6.4.5, which fixes a high-severity advisory in the development server.
+
 ## [1.0.0] - 2026-11-01
 
 The first release.
