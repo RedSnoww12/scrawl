@@ -117,9 +117,10 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
           setSave(s => (pendingRef.current ? s : { state: okState(), error: '' }));
           return;
         } catch (e) {
+          let failure = e;
           if (e instanceof ConflictError) {
             let fresh;
-            try { fresh = await repo.get(p.id); } catch (err) { e = err; fresh = undefined; }
+            try { fresh = await repo.get(p.id); } catch (err) { failure = err; fresh = undefined; }
             if (fresh === null) { lostRef.current(p.id); return; }
             if (fresh) {
               const remote = sanitizeElements(fresh.elements);
@@ -136,7 +137,7 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
             }
           }
           if (!pendingRef.current) pendingRef.current = p; // keep the newest copy for the retry
-          setSave({ state: 'error', error: message(e) });
+          setSave({ state: 'error', error: message(failure) });
           clearTimeout(timerRef.current);
           timerRef.current = window.setTimeout(flush, 5000);
           return;
@@ -340,8 +341,8 @@ export default function Workspace({ repo, user, onSignIn, onSignOut }: Workspace
     (async () => {
       setLoading(true); setLoadError('');
       try {
-        let [list, fs] = await Promise.all([repo.list(), repo.folders()]);
-        if (!list.some(b => b.role === 'owner')) list = [await repo.create({ name: 'Welcome board', elements: sampleScene() }), ...list];
+        const [rows, fs] = await Promise.all([repo.list(), repo.folders()]);
+        const list = rows.some(b => b.role === 'owner') ? rows : [await repo.create({ name: 'Welcome board', elements: sampleScene() }), ...rows];
         if (cancelled) return;
         setBoards(byNewest(list)); setFolders(byName(fs));
         boardsRef.current = list;

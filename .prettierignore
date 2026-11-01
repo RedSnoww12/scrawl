@@ -1,0 +1,7 @@
+dist
+package-lock.json
+legacy-index.html
+# The app source keeps its compact hand-formatted style for now; ESLint checks it.
+src/**/*.ts
+src/**/*.tsx
+src/styles.css

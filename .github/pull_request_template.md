@@ -11,7 +11,7 @@ More in CONTRIBUTING.md → Pull requests.
 ## How I tested it
 
 - [ ] Follows [CLAUDE.md](https://github.com/RedSnoww12/scrawl/blob/main/CLAUDE.md) and the [architecture decisions](https://github.com/RedSnoww12/scrawl/blob/main/docs/adr/README.md), or adds a new decision record
-- [ ] `npm run build` passes
+- [ ] `npm run check` and `npm run build` pass
 - [ ] Tried it in the browser (light and dark mode, and at phone width for UI changes)
 - [ ] For live features: tried it with two browsers or accounts on the same board
 - [ ] If `supabase/schema.sql` changed: it runs twice without errors, and every table has row-level security

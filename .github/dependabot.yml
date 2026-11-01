@@ -1,0 +1,29 @@
+# Weekly pull requests to keep dependencies and actions current (docs/adr/0008).
+# A new version waits a week before it's proposed, so a compromised release has time to be caught.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    groups:
+      dev-tools:
+        dependency-type: development
+        update-types: [minor, patch]
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ['*']

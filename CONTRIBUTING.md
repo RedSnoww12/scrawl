@@ -30,8 +30,9 @@ Guest mode works without any backend. To work on sign-in, sharing or saving onli
    - anything from outside goes through `sanitizeElements()`.
 
    If your change needs to go against one of them, propose a new decision record in the issue first.
+
 3. If you change `supabase/schema.sql`, keep it safe to run more than once (`if not exists`, `drop policy if exists`, `create or replace`). Every table needs row-level security.
-4. Run `npm run build` (type-check and build) and try your change in the browser, in both light and dark mode, and at phone width.
+4. Run `npm run check` (types, lint, formatting and tests) and `npm run build`, then try your change in the browser, in both light and dark mode, and at phone width. `npm run format` fixes formatting; if you change pure logic such as `src/lib/merge.ts` or the sanitizer, add a test next to it (`*.test.ts`).
 5. Open a pull request (see below).
 
 ## Pull requests
@@ -42,26 +43,27 @@ The PR template walks you through this; here is why each part matters.
 
 **Title**: it becomes a line in the release notes as written, so write it for the people using Scrawl, not for the code. Imperative, specific, no prefix or period.
 
-| ✅ | ❌ |
-|---|---|
-| `Connect arrows and lines to shapes` | `feat: connectors` |
+| ✅                                            | ❌                                 |
+| --------------------------------------------- | ---------------------------------- |
+| `Connect arrows and lines to shapes`          | `feat: connectors`                 |
 | `Keep collaborators visible on shared boards` | `Fix presence bug in Presence.tsx` |
-| `Show the version in the shortcuts dialog` | `Update Dialogs.tsx` |
+| `Show the version in the shortcuts dialog`    | `Update Dialogs.tsx`               |
 
 **Description**:
+
 - **What changed**: one or two sentences on the result, and `Closes #12` if it fixes an issue.
 - **How I tested it**: tick what you did, and add anything specific to this change (two browsers for live features, a slow network, a guest and a signed-in account).
 - **Screenshots**: a picture or short clip for anything visible. Before and after helps for fixes.
 
 **Label**: it decides where the PR lands in the release notes. If you can't set labels, a maintainer will.
 
-| Label | For | Release notes section |
-|---|---|---|
-| `enhancement` | something new people can do | ✨ New |
-| `bug` | a fix | 🐛 Fixed |
-| `accessibility` | keyboard, screen reader, contrast | ♿ Accessibility |
-| `documentation` | README, guides | 📝 Docs |
-| `skip-changelog` | CI, refactors, anything users won't notice | left out |
+| Label            | For                                        | Release notes section |
+| ---------------- | ------------------------------------------ | --------------------- |
+| `enhancement`    | something new people can do                | ✨ New                |
+| `bug`            | a fix                                      | 🐛 Fixed              |
+| `accessibility`  | keyboard, screen reader, contrast          | ♿ Accessibility      |
+| `documentation`  | README, guides                             | 📝 Docs               |
+| `skip-changelog` | CI, refactors, anything users won't notice | left out              |
 
 **Changelog**: for a change people will notice, add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), in the right group (`Added`, `Changed`, `Fixed`, `Security`).
 

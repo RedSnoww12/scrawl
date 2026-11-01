@@ -7,10 +7,10 @@ These rules apply to every change, whoever or whatever makes it. The reasons beh
 ## Commands
 
 - `npm run dev`: dev server. Guest mode works without a backend.
-- `npm run build`: type-check and build. Must pass before every pull request; CI runs the same.
-- `npm run typecheck`: types only.
+- `npm run check`: type-check, lint, formatting and tests. Must pass before every pull request; CI runs the same, plus `npm run build`. ([ADR 0010](docs/adr/0010-quality-gates-in-ci.md))
+- `npm run lint`, `npm run format`, `npm test` / `npm run test:watch`: one at a time.
 
-There are no unit tests. Verify in the browser: light and dark mode, phone width, and for live features two accounts on the same board.
+Unit tests (Vitest, `*.test.ts` next to the code) cover pure logic such as the merge and the sanitizer. Add one when you change logic like that. Everything else is verified in the browser: light and dark mode, phone width, and for live features two accounts on the same board.
 
 ## Architecture (must hold)
 
@@ -37,7 +37,8 @@ There are no unit tests. Verify in the browser: light and dark mode, phone width
 
 ## Code style
 
-- Match the file you're in: its density, naming and idiom. Single quotes, two-space indent, terse code.
+- ESLint enforces the hook rules and ADRs 0002 and 0003; fix what it reports rather than disabling the rule.
+- Prettier formats everything outside `src/`. Inside `src/`, match the file you're in: its density, naming and idiom. Single quotes, two-space indent, terse code.
 - Comments explain why, not what. Exported functions and types get a one-line `/** … */`.
 - UI text is short, plain and specific ("Copied the image", not "Success!"). Error messages say what to do next.
 - New UI uses the colour tokens in `src/styles.css` (`--ink`, `--muted`, `--accent`, …) so dark mode works; never hard-code colours.
