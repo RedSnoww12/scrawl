@@ -1,0 +1,47 @@
+name: 🐛 Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a shared board
+        2. Draw an arrow from one box to another
+        3. Move the box
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Signed in?
+      options:
+        - Signed in with Google
+        - Guest (boards in this browser)
+        - Opened someone's shared link
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Scrawl version
+      description: Press `?` in the app; the version is at the bottom of the dialog.
+      placeholder: v1.0.0
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Firefox 140 on macOS, Safari on iPhone…
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or clip
+      description: Drag files here if it helps.

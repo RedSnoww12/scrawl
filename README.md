@@ -4,6 +4,7 @@
 
 **A hand-drawn whiteboard you can share.** Sketch boxes, arrows and notes that look like they were drawn on a napkin, keep as many boards as you like, and work on them with friends.
 
+[![Release](https://img.shields.io/github/v/release/RedSnoww12/scrawl?color=e8590c&label=release)](https://github.com/RedSnoww12/scrawl/releases)
 [![CI](https://github.com/RedSnoww12/scrawl/actions/workflows/ci.yml/badge.svg)](https://github.com/RedSnoww12/scrawl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f5bea.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-scrawl--seven.vercel.app-000?logo=vercel)](https://scrawl-seven.vercel.app)
@@ -15,7 +16,14 @@
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase&logoColor=white)
 ![rough.js](https://img.shields.io/badge/rough.js-4.6-e8590c)
 
-[**Open the app →**](https://scrawl-seven.vercel.app)
+[**Open the app →**](https://scrawl-seven.vercel.app) · [What's new](CHANGELOG.md) · [Report a bug](https://github.com/RedSnoww12/scrawl/issues/new/choose)
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.jpg">
+  <img src="docs/hero-light.jpg" alt="The Scrawl welcome board: a hand-drawn flowchart from 'Sketch the idea' through 'Does it still make sense?' to 'Ship it!', with a dashed arrow looping back" width="100%">
+</picture>
 
 </div>
 
@@ -29,6 +37,7 @@
 ## Features
 
 - **Sketchy drawing**: rectangles, diamonds, ellipses, arrows, lines, freehand ink, text and images, all drawn with [rough.js](https://roughjs.com). Styles, layers, grouping, grid snapping, undo and redo, dark mode.
+- **Connectors**: arrows and lines snap to shapes and stay attached when you move them.
 - **Many boards**: create, rename and delete boards, and sort them into **folders**.
 - **Google sign-in**: your boards follow you to every device.
 - **Sharing**:
@@ -36,7 +45,11 @@
   - or turn on **"Anyone with the link"**, as view or edit;
   - only the owner can change access or delete the board.
 - **Shared with me**: boards other people share with you show up in their own tab. You can file them in your own folders, or remove them from your list.
-- **Live together**: edits from others appear while you draw. If two people change the board at the same moment, Scrawl merges the two shape by shape instead of letting one overwrite the other.
+- **Live together**:
+  - see everyone's cursor and name, and their strokes while they draw;
+  - press `/` to leave a comment that follows your pointer;
+  - click someone's avatar to see what they see, or double-click it to follow them as they move around;
+  - if two people change the board at the same moment, Scrawl merges the two shape by shape instead of letting one overwrite the other.
 - **Guest mode**: try it without an account. Boards stay in your browser, and you can copy them to your account when you sign in.
 - **Files**: save and open `.scrawl.json`, export PNG or SVG, or copy the image to the clipboard.
 
@@ -103,6 +116,10 @@ Press `?` in the app for the full list. The basics:
 Issues and pull requests are welcome: bug fixes, new tools, translations, accessibility. Read [CONTRIBUTING.md](CONTRIBUTING.md) to get set up, and open an issue first for big changes so we can agree on the approach.
 
 To report a security problem, see [SECURITY.md](SECURITY.md) instead of opening a public issue.
+
+## Releases
+
+Scrawl follows [Semantic Versioning](https://semver.org/). Each version gets notes on the [releases page](https://github.com/RedSnoww12/scrawl/releases) and an entry in [CHANGELOG.md](CHANGELOG.md). In the app, the Keyboard shortcuts dialog (`?`) shows which version you're running.
 
 ## License
 

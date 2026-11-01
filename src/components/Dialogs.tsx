@@ -29,6 +29,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
       <div className="help">
         {HELP.map(([a, k]) => (k ? <div key={a}><span>{a}</span><kbd>{k}</kbd></div> : <h4 key={a}>{a}</h4>))}
       </div>
+      <p className="hint-text">
+        Scrawl v{__APP_VERSION__} · <a href="https://github.com/RedSnoww12/scrawl/releases" target="_blank" rel="noopener noreferrer">What's new</a>
+      </p>
     </Modal>
   );
 }

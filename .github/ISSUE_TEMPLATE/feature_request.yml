@@ -1,0 +1,21 @@
+name: ✨ Feature request
+description: Suggest an idea for Scrawl
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does it matter to you?
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: Ideas for how it could work
+      description: Optional. Sketches welcome. You could even draw them in Scrawl.

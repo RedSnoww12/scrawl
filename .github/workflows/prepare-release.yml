@@ -1,0 +1,61 @@
+name: Prepare release
+
+# Run from the Actions tab. Opens a "Release vX.Y.Z" pull request that bumps package.json and moves
+# the [Unreleased] changelog entries under the new version. Merging it publishes the release.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'patch: fixes only · minor: new features · major: breaks existing boards or links'
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bump the version and the changelog
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          prev=$(node -p "require('./package.json').version")
+          npm version "$BUMP" --no-git-tag-version >/dev/null
+          next=$(node -p "require('./package.json').version")
+          node scripts/changelog.mjs release "$prev" "$next" "$(date -u +%F)"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - name: Push the release branch
+        env:
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "release/v$NEXT"
+          git commit -am "Release v$NEXT"
+          git push -u origin "release/v$NEXT"
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          # Pull requests opened by this workflow don't start CI themselves, so start the required check here.
+          gh workflow run ci.yml --ref "release/v$NEXT"
+          node scripts/changelog.mjs notes "$NEXT" > notes.md
+          printf '\n---\nMerging this publishes **v%s** on the releases page.\n' "$NEXT" >> notes.md
+          if gh pr create --base main --head "release/v$NEXT" --title "Release v$NEXT" \
+              --label skip-changelog --body-file notes.md; then
+            exit 0
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...release/v$NEXT?expand=1&title=Release%20v$NEXT"
+          echo "::warning::Couldn't open the pull request. Turn on Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or open it yourself: $url"
+          echo "Open the release pull request: $url" >> "$GITHUB_STEP_SUMMARY"
