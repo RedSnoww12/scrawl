@@ -35,7 +35,7 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
   const [comment, setComment] = useState<MyComment | null>(null);
   const roomRef = useRef<Room | null>(null);
-  const mine = useRef<Cursor>({ x: null, y: 0, text: '' });
+  const mine = useRef<Cursor>({ x: null, y: 0, text: '', away: document.visibilityState === 'hidden' });
   const pointer = useRef<{ x: number; y: number } | null>(null); // on screen
   const ownEl = useRef<HTMLDivElement | null>(null);
   const sendTimer = useRef(0), lastSent = useRef(0), fadeTimer = useRef(0);
@@ -106,17 +106,22 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     // scrolling moves the board under a still pointer
     const onWheel = () => requestAnimationFrame(() => { if (pointer.current) track(pointer.current.x, pointer.current.y); });
     const gone = () => { mine.current = { ...mine.current, x: null }; send(); };
-    const onHide = () => { if (document.visibilityState === 'hidden') gone(); };
+    // still connected while in another tab, just not looking
+    const onVisibility = () => {
+      const away = document.visibilityState === 'hidden';
+      mine.current = { ...mine.current, away, x: away ? null : mine.current.x };
+      send();
+    };
     const root = document.documentElement;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('wheel', onWheel, { passive: true });
     root.addEventListener('pointerleave', gone);
-    document.addEventListener('visibilitychange', onHide);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('wheel', onWheel);
       root.removeEventListener('pointerleave', gone);
-      document.removeEventListener('visibilitychange', onHide);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [live, engine, send]);
 
@@ -163,16 +168,19 @@ export function PeerStack({ room }: { room: RoomState }) {
   if (!room.live) return null;
   const people = [...new Map(room.peers.map(p => [p.userId, p])).values()]; // one face per person, however many tabs
   const shown = people.slice(0, 4);
+  // away when none of their tabs is in front
+  const away = (userId: string) => room.peers.every(p => p.userId !== userId || room.cursors[p.key]?.away);
+  const label = (p: Peer) => (away(p.userId) ? `${p.name} (away)` : p.name);
   return (
     <div className="peers">
       {shown.length > 0 && (
-        <div className="peer-faces" aria-label={`Also here: ${people.map(p => p.name).join(', ')}`} role="img">
+        <div className="peer-faces" aria-label={`Also here: ${people.map(label).join(', ')}`} role="img">
           {shown.map(p => (
-            <span key={p.userId} className="peer" style={peerStyle(p.userId)} title={p.name}>
+            <span key={p.userId} className={away(p.userId) ? 'peer away' : 'peer'} style={peerStyle(p.userId)} title={label(p)}>
               {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" /> : (p.name[0] || '?').toUpperCase()}
             </span>
           ))}
-          {people.length > shown.length && <span className="peer more" title={people.slice(4).map(p => p.name).join(', ')}>+{people.length - shown.length}</span>}
+          {people.length > shown.length && <span className="peer more" title={people.slice(4).map(label).join(', ')}>+{people.length - shown.length}</span>}
         </div>
       )}
       <button className="icon-btn island comment-btn" title="Comment next to your pointer ( / )" aria-label="Comment"

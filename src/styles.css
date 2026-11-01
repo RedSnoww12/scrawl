@@ -398,6 +398,7 @@ button { font: inherit; color: inherit; }
 }
 .peer img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .peer.more { --peer: var(--muted); font-size: 12px; }
+.peer.away { opacity: .45; filter: grayscale(.6); }
 .comment-btn { width: 40px; height: 40px; border-radius: 12px; }
 .cursors { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .cursor { position: fixed; left: 0; top: 0; pointer-events: none; will-change: transform; z-index: 3; }
