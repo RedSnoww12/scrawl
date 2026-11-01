@@ -105,8 +105,11 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     };
   }
   let viewTimer = 0;
-  function viewChanged() {
+  const viewWatchers = new Set<(byUser: boolean) => void>();
+  /** `byUser`: this person panned or zoomed, rather than a board load, a window resize or showArea. */
+  function viewChanged(byUser = true) {
     positionEditor(); emit(); redraw();
+    viewWatchers.forEach(fn => fn(byUser));
     clearTimeout(viewTimer);
     viewTimer = window.setTimeout(() => onView?.({ sx: st.sx, sy: st.sy, zoom: st.zoom }), 300);
   }
@@ -248,6 +251,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     const dpr = devicePixelRatio || 1;
     canvas.width = Math.round(canvas.clientWidth * dpr); canvas.height = Math.round(canvas.clientHeight * dpr);
     render();
+    viewWatchers.forEach(fn => fn(false));
   }
   const ro = new ResizeObserver(resize); ro.observe(canvas);
 
@@ -719,7 +723,7 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
       if (editing) { editing = null; ta.hidden = true; }
       elements = sanitizeElements(els); lastSnap = JSON.stringify(elements); undoStack = []; redoStack = [];
       st.sel.clear(); erasing.clear(); ghosts.clear(); drag = null;
-      if (view && Number.isFinite(view.zoom)) { st.sx = view.sx; st.sy = view.sy; st.zoom = clamp(view.zoom, 0.1, 10); viewChanged(); }
+      if (view && Number.isFinite(view.zoom)) { st.sx = view.sx; st.sy = view.sy; st.zoom = clamp(view.zoom, 0.1, 10); viewChanged(false); }
       else zoomToFit(false, 1);
       emit(); redraw();
     },
@@ -737,6 +741,15 @@ export function createEngine({ canvas, editor: ta, style: initialStyle, onChange
     clearLive() { ghosts.clear(); redraw(); },
     getElements: (): SceneElement[] => elements.filter(el => el !== editing),
     getView: (): View => ({ sx: st.sx, sy: st.sy, zoom: st.zoom }),
+    /** The part of the board on screen, in board coordinates. */
+    getArea: (): Bounds => ({ x: -st.sx, y: -st.sy, w: canvas.clientWidth / st.zoom, h: canvas.clientHeight / st.zoom }),
+    /** Show all of `a`, centered, however this screen's shape differs from the one it came from. */
+    showArea(a: Bounds) {
+      const W = canvas.clientWidth, H = canvas.clientHeight;
+      const z = clamp(Math.min(W / Math.max(a.w, 1), H / Math.max(a.h, 1)), 0.1, 10);
+      st.zoom = z; st.sx = W / 2 / z - (a.x + a.w / 2); st.sy = H / 2 / z - (a.y + a.h / 2); viewChanged(false);
+    },
+    watchView(fn: (byUser: boolean) => void) { viewWatchers.add(fn); return () => { viewWatchers.delete(fn); }; },
     flushText: () => commitText(),
     selected,
     // tools & style

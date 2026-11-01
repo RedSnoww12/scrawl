@@ -1,9 +1,9 @@
 // The other people on a board right now: their faces in the top bar, their pointers on the canvas,
 // and the short comments anyone can type next to their own pointer (press /).
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { Engine } from '../engine/engine';
-import type { SceneElement } from '../engine/scene';
+import type { Bounds, SceneElement } from '../engine/scene';
 import { MAX_COMMENT, type Cursor, type Peer, type Room, type Sharing } from '../lib/repos';
 import { UiIcons } from './icons';
 
@@ -12,6 +12,7 @@ const SEND_EVERY = 60;     // ms between pointer updates, well under Realtime's 
 const DRAW_EVERY = 80;     // ms between updates of a shape being drawn
 const HOLD_DRAWING = 10_000, HOLD_DONE = 5000; // ms someone's shape stays up without news, while drawing / until their save arrives
 const COMMENT_FOR = 5000;  // ms a sent comment stays next to the pointer
+const DOUBLE_CLICK = 250;  // ms a click on a face waits to see whether it becomes a double click
 
 /** Each person keeps the same color on every screen. */
 export function colorFor(userId: string): string {
@@ -41,6 +42,9 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
   const sendTimer = useRef(0), lastSent = useRef(0), fadeTimer = useRef(0);
   const drawing = useRef<{ els: SceneElement[]; done: boolean; dropped: string[] } | null>(null);
   const drawTimer = useRef(0), lastDrawn = useRef(0);
+  // whose eyes you look through, and the part of the board they last showed
+  const [following, setFollowing] = useState<string | null>(null);
+  const followed = useRef<Bounds | null>(null);
 
   // at most one update per SEND_EVERY, and always the latest one
   const send = useCallback(() => {
@@ -87,7 +91,7 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
       room.leave(); roomRef.current = null; engine?.clearLive();
       clearTimeout(sendTimer.current); clearTimeout(fadeTimer.current); clearTimeout(drawTimer.current); drawing.current = null;
       mine.current = { ...mine.current, text: '' };
-      setPeers([]); setCursors({}); setComment(null);
+      setPeers([]); setCursors({}); setComment(null); setFollowing(null); followed.current = null;
     };
   }, [engine, sharing, boardId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -103,8 +107,16 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
       send();
     };
     const onMove = (e: PointerEvent) => track(e.clientX, e.clientY);
-    // scrolling moves the board under a still pointer
-    const onWheel = () => requestAnimationFrame(() => { if (pointer.current) track(pointer.current.x, pointer.current.y); });
+    // While following someone, pass on what they see rather than this screen's fit of it: two people
+    // following each other then settle on one view, instead of zooming out a little on every round.
+    const showView = () => { mine.current = { ...mine.current, view: followed.current ?? engine.getArea() }; };
+    showView();
+    const stopView = engine.watchView(byUser => {
+      if (byUser && followed.current) { followed.current = null; setFollowing(null); } // you took the wheel back
+      showView();
+      if (pointer.current) track(pointer.current.x, pointer.current.y); // the board moved under a still pointer
+      else send();
+    });
     const gone = () => { mine.current = { ...mine.current, x: null }; send(); };
     // still connected while in another tab, just not looking
     const onVisibility = () => {
@@ -114,16 +126,58 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     };
     const root = document.documentElement;
     window.addEventListener('pointermove', onMove);
-    window.addEventListener('wheel', onWheel, { passive: true });
     root.addEventListener('pointerleave', gone);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      stopView();
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('wheel', onWheel);
       root.removeEventListener('pointerleave', gone);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [live, engine, send]);
+
+  // the tab to look through: one in front if they have several, and one that told us what it shows
+  const viewOf = useCallback((who: string) => {
+    const tabs = peers.filter(p => p.userId === who && cursors[p.key]?.view);
+    const tab = tabs.find(p => !cursors[p.key].away) ?? tabs[0];
+    return tab ? cursors[tab.key].view! : null;
+  }, [peers, cursors]);
+
+  const stopFollowing = useCallback(() => {
+    followed.current = null; setFollowing(null);
+    if (engine) { mine.current = { ...mine.current, view: engine.getArea() }; send(); }
+  }, [engine, send]);
+  /** A click on someone's face shows what they see; a double click keeps following them. While following,
+   *  a click on another face switches to them, and on the same face stops. */
+  const pickPeer = useCallback((who: string, double: boolean) => {
+    if (!double && following) return who === following ? stopFollowing() : setFollowing(who);
+    if (double) return setFollowing(who);
+    const v = viewOf(who);
+    if (v) engine?.showArea(v);
+  }, [engine, following, viewOf, stopFollowing]);
+
+  // keep the screen on what the followed person sees; stop when they leave
+  useEffect(() => {
+    if (!following || !engine) return;
+    if (!peers.some(p => p.userId === following)) { stopFollowing(); return; }
+    const v = viewOf(following);
+    if (!v) return;
+    const was = followed.current;
+    if (was && was.x === v.x && was.y === v.y && was.w === v.w && was.h === v.h) return; // only their pointer moved
+    followed.current = v;
+    engine.showArea(v);
+  }, [following, engine, peers, viewOf, stopFollowing]);
+
+  // Escape stops following
+  useEffect(() => {
+    if (!following) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || (e.target instanceof Element && e.target.matches('input, textarea, select'))) return;
+      stopFollowing();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [following, stopFollowing]);
 
   const say = useCallback((text: string) => {
     mine.current = { ...mine.current, text: text.slice(0, MAX_COMMENT) };
@@ -158,27 +212,42 @@ export function useRoom(engine: Engine | null, sharing: Sharing | undefined, boa
     return () => window.removeEventListener('keydown', onKey);
   }, [live, startComment]);
 
-  return { live, peers, cursors, comment, placeOwn, startComment, typeComment, sendComment, cancelComment, draw };
+  return { live, peers, cursors, comment, placeOwn, startComment, typeComment, sendComment, cancelComment, draw,
+    following, pickPeer, stopFollowing, canFollow: (who: string) => !!viewOf(who) };
 }
 
 export type RoomState = ReturnType<typeof useRoom>;
 
 /** The faces of everyone else on the board, and the button that starts a comment. */
 export function PeerStack({ room }: { room: RoomState }) {
+  const clickTimer = useRef(0);
+  useEffect(() => () => clearTimeout(clickTimer.current), []);
   if (!room.live) return null;
   const people = [...new Map(room.peers.map(p => [p.userId, p])).values()]; // one face per person, however many tabs
   const shown = people.slice(0, 4);
   // away when none of their tabs is in front
   const away = (userId: string) => room.peers.every(p => p.userId !== userId || room.cursors[p.key]?.away);
   const label = (p: Peer) => (away(p.userId) ? `${p.name} (away)` : p.name);
+  const hint = (p: Peer) => !room.canFollow(p.userId) ? label(p)
+    : room.following === p.userId ? `Following ${label(p)}: click or Esc to stop`
+    : `${label(p)}: click to see what they see, double-click to follow`;
+  // wait a moment on a single click, so a double click doesn't also jump once
+  const onFace = (who: string) => (e: ReactMouseEvent) => {
+    clearTimeout(clickTimer.current);
+    if (e.detail >= 2) room.pickPeer(who, true);
+    else if (e.detail === 0) room.pickPeer(who, false); // keyboard
+    else clickTimer.current = window.setTimeout(() => room.pickPeer(who, false), DOUBLE_CLICK);
+  };
   return (
     <div className="peers">
       {shown.length > 0 && (
-        <div className="peer-faces" aria-label={`Also here: ${people.map(label).join(', ')}`} role="img">
+        <div className="peer-faces" role="group" aria-label={`Also here: ${people.map(label).join(', ')}`}>
           {shown.map(p => (
-            <span key={p.userId} className={away(p.userId) ? 'peer away' : 'peer'} style={peerStyle(p.userId)} title={label(p)}>
+            <button key={p.userId} className={['peer', away(p.userId) && 'away', room.following === p.userId && 'following'].filter(Boolean).join(' ')}
+              style={peerStyle(p.userId)} title={hint(p)} aria-label={hint(p)} aria-pressed={room.following === p.userId}
+              onPointerDown={e => e.preventDefault()} onClick={onFace(p.userId)}>
               {p.avatar ? <img src={p.avatar} alt="" referrerPolicy="no-referrer" /> : (p.name[0] || '?').toUpperCase()}
-            </span>
+            </button>
           ))}
           {people.length > shown.length && <span className="peer more" title={people.slice(4).map(label).join(', ')}>+{people.length - shown.length}</span>}
         </div>
@@ -193,7 +262,8 @@ export function PeerStack({ room }: { room: RoomState }) {
 
 /** Everyone else's pointer, with their name or the comment they are typing, plus your own comment box. */
 export function CursorLayer({ engine, room, me }: { engine: Engine; room: RoomState; me: string }) {
-  const { peers, cursors, comment } = room;
+  const { peers, cursors, comment, following } = room;
+  const leader = following ? peers.find(p => p.userId === following) : undefined;
   const nodes = useRef(new Map<string, HTMLDivElement>());
   const shown = useRef(new Map<string, { x: number; y: number }>()); // eased positions, in board coordinates
   const cursorsRef = useRef(cursors);
@@ -241,6 +311,14 @@ export function CursorLayer({ engine, room, me }: { engine: Engine; room: RoomSt
           );
         })}
       </div>
+      {leader && (
+        <div className="follow-frame" style={peerStyle(leader.userId)}>
+          <div className="follow-label" role="status">
+            Following {leader.name}
+            <button onClick={room.stopFollowing} aria-label={`Stop following ${leader.name}`} title="Stop following (Esc)">{UiIcons.close}</button>
+          </div>
+        </div>
+      )}
       {comment && (
         <div ref={room.placeOwn} className="cursor mine" style={peerStyle(me)}>
           {comment.editing

@@ -399,6 +399,23 @@ button { font: inherit; color: inherit; }
 .peer img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .peer.more { --peer: var(--muted); font-size: 12px; }
 .peer.away { opacity: .45; filter: grayscale(.6); }
+button.peer { padding: 0; cursor: pointer; transition: transform .12s; }
+button.peer:hover { transform: translateY(-1px); z-index: 1; }
+button.peer:focus-visible { outline: 2px solid var(--peer); outline-offset: 2px; }
+.peer.following { z-index: 2; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--peer); }
+/* while you look through someone's eyes, their color frames the screen */
+.follow-frame { position: fixed; inset: 0; border: 3px solid var(--peer); pointer-events: none; z-index: 4; }
+.follow-label {
+  position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); pointer-events: auto;
+  display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 12px; border-radius: 999px;
+  background: var(--peer); color: #fff; font: 600 13px var(--font-ui); box-shadow: var(--shadow); white-space: nowrap;
+}
+.follow-label button {
+  width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .2); color: inherit;
+  display: grid; place-items: center; cursor: pointer;
+}
+.follow-label button:hover { background: rgba(255, 255, 255, .35); }
+.follow-label svg { width: 14px; height: 14px; }
 .comment-btn { width: 40px; height: 40px; border-radius: 12px; }
 .cursors { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .cursor { position: fixed; left: 0; top: 0; pointer-events: none; will-change: transform; z-index: 3; }
