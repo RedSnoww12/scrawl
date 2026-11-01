@@ -4,9 +4,18 @@ Notable changes to Scrawl. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- Search boards by name in the board list. Matching folders open while you search, and Escape clears it.
+
+### Changed
+
+- Update React to 19.3.1.
+
 ### Security
 
-- Upgrade Vite to 6.4.5, which fixes a high-severity advisory in the development server.
+- Upgrade Vite to 8.3.5, which fixes a high-severity advisory in the development server. This affects people running Scrawl locally, not the deployed app.
+- Patch `minimatch` in the lint tools against a denial-of-service advisory.
 
 ## [1.0.0] - 2026-11-01
 
