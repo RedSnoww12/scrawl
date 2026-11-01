@@ -6,6 +6,8 @@
 
 [![Release](https://img.shields.io/github/v/release/RedSnoww12/scrawl?color=e8590c&label=release)](https://github.com/RedSnoww12/scrawl/releases)
 [![CI](https://github.com/RedSnoww12/scrawl/actions/workflows/ci.yml/badge.svg)](https://github.com/RedSnoww12/scrawl/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/RedSnoww12/scrawl/actions/workflows/codeql.yml/badge.svg)](https://github.com/RedSnoww12/scrawl/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/RedSnoww12/scrawl/badge)](https://scorecard.dev/viewer/?uri=github.com/RedSnoww12/scrawl)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f5bea.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-scrawl--seven.vercel.app-000?logo=vercel)](https://scrawl-seven.vercel.app)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-2b8a3e.svg)](CONTRIBUTING.md)
@@ -55,15 +57,16 @@
 
 ## How it works
 
-| Part | Where |
-|---|---|
-| Canvas engine: scene model, rendering, input, history. No React. | [`src/engine/`](src/engine) |
-| Interface: toolbar, style panel, board list, share dialog | [`src/components/`](src/components) |
-| Storage behind one interface: this browser (guest) or Supabase | [`src/lib/repos.ts`](src/lib/repos.ts) |
-| Shape-by-shape merge when two people edit at once | [`src/lib/merge.ts`](src/lib/merge.ts) |
-| Tables, access rules (row-level security) and functions | [`supabase/schema.sql`](supabase/schema.sql) |
+| Part                                                             | Where                                        |
+| ---------------------------------------------------------------- | -------------------------------------------- |
+| Canvas engine: scene model, rendering, input, history. No React. | [`src/engine/`](src/engine)                  |
+| Interface: toolbar, style panel, board list, share dialog        | [`src/components/`](src/components)          |
+| Storage behind one interface: this browser (guest) or Supabase   | [`src/lib/repos.ts`](src/lib/repos.ts)       |
+| Shape-by-shape merge when two people edit at once                | [`src/lib/merge.ts`](src/lib/merge.ts)       |
+| Tables, access rules (row-level security) and functions          | [`supabase/schema.sql`](supabase/schema.sql) |
 
 All access control lives in the database:
+
 - every board has an owner, plus optional invites (`board_members`) and an optional link setting;
 - a `board_role()` function decides who is an owner, an editor, a viewer or nobody;
 - every policy goes through that function;
@@ -81,13 +84,13 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Then open http://localhost:5173. Without your own Supabase project you can still use guest mode. `npm run build` type-checks and builds to `dist/`.
+Then open http://localhost:5173. Without your own Supabase project you can still use guest mode. `npm run check` runs the type-check, lint, formatting check and tests; `npm run build` builds to `dist/`.
 
 ### Your own Supabase project
 
 1. **Create the tables.** Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor. It is safe to run again after pulling changes.
 2. **Turn on Google sign-in.**
-   - In Google Cloud Console, create an OAuth client ID of type *Web application*.
+   - In Google Cloud Console, create an OAuth client ID of type _Web application_.
    - Add `https://<project>.supabase.co/auth/v1/callback` as an authorized redirect URI.
    - In Supabase, open Authentication → Providers → Google, turn it on, and paste the client ID and secret.
 3. **Set the redirect URLs.** In Authentication → URL Configuration, set the Site URL to your deployed address. Add that address and `http://localhost:5173` to the redirect URLs.
@@ -106,6 +109,7 @@ Any static host works. On Vercel, import the repository: it detects Vite, runs `
 ## Keyboard
 
 Press `?` in the app for the full list. The basics:
+
 - `1`–`9` and `0` switch tools;
 - `Ctrl Z` / `Ctrl ⇧ Z` undo and redo;
 - `Ctrl D` duplicates, `Ctrl G` groups;

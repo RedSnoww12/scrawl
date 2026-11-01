@@ -7,12 +7,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const FILE = new URL('../CHANGELOG.md', import.meta.url);
 const REPO = 'https://github.com/RedSnoww12/scrawl';
 
-const fail = msg => { console.error(msg); process.exit(1); };
+const fail = msg => {
+  console.error(msg);
+  process.exit(1);
+};
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The text under "## [version]", up to the next "## [" heading or the link list. */
 function section(text, version) {
-  const m = text.match(new RegExp(`^## \\[${esc(version)}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|^\\[[^\\]]+\\]: |(?![\\s\\S]))`, 'm'));
+  const m = text.match(
+    new RegExp(`^## \\[${esc(version)}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|^\\[[^\\]]+\\]: |(?![\\s\\S]))`, 'm'),
+  );
   return m ? m[1].trim() : null;
 }
 
@@ -31,7 +36,10 @@ if (cmd === 'notes') {
   if (!section(text, 'Unreleased')) fail('Nothing under ## [Unreleased] in CHANGELOG.md. Add the changes first.');
   const out = text
     .replace(/^## \[Unreleased\]\n/m, `## [Unreleased]\n\n## [${next}] - ${date}\n`)
-    .replace(/^\[Unreleased\]: .*$/m, `[Unreleased]: ${REPO}/compare/v${next}...HEAD\n[${next}]: ${REPO}/compare/v${prev}...v${next}`);
+    .replace(
+      /^\[Unreleased\]: .*$/m,
+      `[Unreleased]: ${REPO}/compare/v${next}...HEAD\n[${next}]: ${REPO}/compare/v${prev}...v${next}`,
+    );
   writeFileSync(FILE, out);
 } else {
   fail('Usage: changelog.mjs notes <version> | release <previous> <new> <date>');

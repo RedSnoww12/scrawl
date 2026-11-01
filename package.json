@@ -13,7 +13,13 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "tsc --noEmit && vite build",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,10 +29,18 @@
     "roughjs": "4.6.6"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/react": "19.1.6",
     "@types/react-dom": "19.1.5",
     "@vitejs/plugin-react": "4.5.2",
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
     "typescript": "5.8.3",
-    "vite": "6.4.5"
+    "typescript-eslint": "8.72.1",
+    "vite": "6.4.5",
+    "vitest": "5.0.5"
   }
 }
