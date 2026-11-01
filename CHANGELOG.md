@@ -4,6 +4,8 @@ Notable changes to Scrawl. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-01
+
 ### Added
 
 - Search boards by name in the board list. Matching folders open while you search, and Escape clears it.
@@ -42,5 +44,6 @@ The first release.
 - Collaborators' avatars load only from Google's image hosts.
 - Imported scenes are sanitized and rough.js is pinned with SRI.
 
-[Unreleased]: https://github.com/RedSnoww12/scrawl/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/RedSnoww12/scrawl/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/RedSnoww12/scrawl/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/RedSnoww12/scrawl/releases/tag/v1.0.0

@@ -1,7 +1,7 @@
 {
   "name": "scrawl",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A hand-drawn whiteboard you can share: sketchy shapes, folders, Google sign-in and live collaboration.",
   "license": "MIT",
   "repository": {
