@@ -1,0 +1,42 @@
+name: Release
+
+# Publishes a GitHub release whenever main reaches a package.json version that has no tag yet.
+# Merging the pull request from "Prepare release" is what normally triggers it.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Find the version
+        id: version
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "v$v is already released; nothing to do."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish the release
+        if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node scripts/changelog.mjs notes "$VERSION" > notes.md
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+            --notes "$(cat notes.md)" --generate-notes

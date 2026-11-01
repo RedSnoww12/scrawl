@@ -77,8 +77,11 @@ Versions follow [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
 
 To cut a release (maintainers):
 
-1. On a branch, set the new version in `package.json` (`npm version 1.1.0 --no-git-tag-version`), move the `[Unreleased]` entries in `CHANGELOG.md` under a new heading for that version, and merge the pull request.
-2. On GitHub, draft a new release on `main` with a new tag `v1.1.0`, press **Generate release notes**, edit if needed, and publish.
+1. Make sure `## [Unreleased]` in `CHANGELOG.md` lists what's going out.
+2. In the Actions tab, run **Prepare release** and pick patch, minor or major. It opens a `Release vX.Y.Z` pull request that bumps `package.json` and moves the changelog entries under the new version.
+3. Review and merge it. The **Release** workflow then tags `main` and publishes the release, with the changelog section followed by the notes GitHub generates from the PR labels.
+
+Publishing only happens when `main` reaches a version that has no tag yet, so ordinary merges never release anything. To do it by hand instead, change the version with `npm version 1.1.0 --no-git-tag-version`, run `node scripts/changelog.mjs release 1.0.0 1.1.0 YYYY-MM-DD`, and merge.
 
 The app shows its version at the bottom of the Keyboard shortcuts dialog, so people can tell which release they're running.
 
