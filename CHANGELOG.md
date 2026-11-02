@@ -4,6 +4,10 @@ Notable changes to Scrawl. The format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Added
+
+- A presentation page at [redsnoww12.github.io/scrawl](https://redsnoww12.github.io/scrawl/), in the same look as the app.
+
 ## [1.1.0] - 2026-11-01
 
 ### Added
