@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Scrawl: a hand-drawn whiteboard you can share</title>
+    <meta
+      name="description"
+      content="Sketch boxes, arrows and notes that look drawn on a napkin, keep as many boards as you like, and work on them live with friends."
+    />
+    <meta name="theme-color" content="#fcfcfd" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131519" media="(prefers-color-scheme: dark)" />
+    <meta property="og:title" content="Scrawl" />
+    <meta property="og:description" content="A hand-drawn whiteboard you can share." />
+    <meta property="og:image" content="https://redsnoww12.github.io/scrawl/hero-light.jpg" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f5bea' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5zM13.5 7l3 3'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&family=Kalam:wght@400;700&display=swap"
+    />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand island" href="./" aria-label="Scrawl home">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5zM13.5 7l3 3" />
+        </svg>
+        <span>Scrawl</span>
+      </a>
+      <nav class="island nav">
+        <a href="https://github.com/RedSnoww12/scrawl">GitHub</a>
+        <a href="https://github.com/RedSnoww12/scrawl/blob/main/CHANGELOG.md">What's new</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>
+          A whiteboard that looks
+          <em
+            >hand-drawn<svg viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M3 8c40-5 90-6 140-3 20 1 38 2 54 0" /></svg
+          ></em>
+        </h1>
+        <p class="lede">
+          Sketch boxes, arrows and notes that look like they were drawn on a napkin, keep as many boards as you like,
+          and work on them live with friends.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="https://scrawl-seven.vercel.app">Open the app</a>
+          <a class="btn" href="https://github.com/RedSnoww12/scrawl">View the code</a>
+        </div>
+        <p class="note">Free and open source. Try it as a guest, no account needed.</p>
+      </section>
+
+      <figure class="shot island hero-shot">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="hero-dark.jpg" />
+          <img
+            src="hero-light.jpg"
+            width="800"
+            height="450"
+            alt="The Scrawl welcome board: a hand-drawn flowchart from 'Sketch the idea' through 'Does it still make sense?' to 'Ship it!', with a dashed arrow looping back"
+          />
+        </picture>
+      </figure>
+
+      <section class="features" aria-label="Features">
+        <article class="island card">
+          <h2><span class="tag">1</span> Draw</h2>
+          <ul>
+            <li>Rectangles, diamonds, ellipses, arrows, freehand ink, text and images, all sketchy.</li>
+            <li>Arrows snap to shapes and stay attached when you move them.</li>
+            <li>Export PNG or SVG, or copy the image to the clipboard.</li>
+          </ul>
+        </article>
+        <article class="island card">
+          <h2><span class="tag">2</span> Organise</h2>
+          <ul>
+            <li>As many boards as you like, sorted into folders and searchable by name.</li>
+            <li>Sign in with Google and your boards follow you to every device.</li>
+            <li>Or stay a guest: boards live in your browser until you copy them over.</li>
+          </ul>
+        </article>
+        <article class="island card">
+          <h2><span class="tag">3</span> Draw together</h2>
+          <ul>
+            <li>Invite people as viewers or editors, or share a link anyone can open.</li>
+            <li>See everyone's cursor and strokes live, and follow what they see.</li>
+            <li>Edits made at the same time merge shape by shape, so nothing is lost.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="pair">
+        <figure class="shot island">
+          <img
+            src="board-list.jpg"
+            width="800"
+            height="600"
+            loading="lazy"
+            alt="A shared board in view-only mode, with the board list showing your own board and one shared by Alice"
+          />
+          <figcaption>Your boards and the ones shared with you, side by side.</figcaption>
+        </figure>
+        <figure class="shot island">
+          <img
+            src="share-dialog.jpg"
+            width="800"
+            height="600"
+            loading="lazy"
+            alt="The share dialog: copy the link, choose who can open it, invite people by email as viewers or editors"
+          />
+          <figcaption>Share a link, or invite people by email.</figcaption>
+        </figure>
+      </section>
+
+      <section class="cta island">
+        <h2>Got an idea? <em>Sketch it.</em></h2>
+        <a class="btn primary" href="https://scrawl-seven.vercel.app">Open the app</a>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>MIT licensed</span>
+      <a href="https://github.com/RedSnoww12/scrawl/releases">Releases</a>
+      <a href="https://github.com/RedSnoww12/scrawl/issues/new/choose">Report a bug</a>
+      <a href="https://github.com/RedSnoww12/scrawl/blob/main/CONTRIBUTING.md">Contribute</a>
+    </footer>
+  </body>
+</html>
